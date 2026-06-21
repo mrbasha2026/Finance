@@ -20,9 +20,9 @@ export default function TwoFactorSetupPage() {
   async function handleStart() {
     setLoading(true);
     const res = await fetch("/api/auth/2fa");
-    const data = await res.json();
     setLoading(false);
     if (!res.ok) { toast.error("حدث خطأ في إنشاء رمز QR"); return; }
+    const data = await res.json();
     setQrData(data);
     setStep("scan");
   }

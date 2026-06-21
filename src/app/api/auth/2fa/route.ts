@@ -7,26 +7,30 @@ import qrcode from "qrcode";
 
 // GET — generate TOTP secret + QR code for setup
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const secret = authenticator.generateSecret();
+    const otpauth = authenticator.keyuri(
+      session.user.email,
+      "DealzTree",
+      secret
+    );
+    const qrDataUrl = await qrcode.toDataURL(otpauth);
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { twoFactorSecret: secret },
+    });
+
+    return NextResponse.json({ secret, qrDataUrl });
+  } catch (error) {
+    console.error("[GET /api/auth/2fa]", error);
+    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
-
-  const secret = authenticator.generateSecret();
-  const otpauth = authenticator.keyuri(
-    session.user.email,
-    "لوحة الأرباح والخسائر",
-    secret
-  );
-  const qrDataUrl = await qrcode.toDataURL(otpauth);
-
-  // Store secret temporarily (not activated until verified)
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: { twoFactorSecret: secret },
-  });
-
-  return NextResponse.json({ secret, qrDataUrl });
 }
 
 // POST — verify token and enable 2FA
