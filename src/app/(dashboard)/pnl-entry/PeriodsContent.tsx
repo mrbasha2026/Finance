@@ -129,6 +129,8 @@ export default function PeriodsContent() {
   const [filterCompany, setFilterCompany] = useState<string>("all");
   const [confirm, setConfirm]             = useState<Dataset | null>(null);
   const [deleting, setDeleting]           = useState(false);
+  const [confirmCompany, setConfirmCompany] = useState<string | null>(null);
+  const [deletingCompany, setDeletingCompany] = useState(false);
 
   const [selected, setSelected]           = useState<Dataset | null>(null);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
@@ -174,6 +176,16 @@ export default function PeriodsContent() {
     setDeleting(false);
     setConfirm(null);
     if (selected?.id === confirm.id) setSelected(null);
+    load();
+  }
+
+  async function handleDeleteCompany() {
+    if (!confirmCompany) return;
+    setDeletingCompany(true);
+    const toDelete = datasets.filter((d) => d.companyName === confirmCompany);
+    await Promise.all(toDelete.map((d) => fetch(`/api/pnl/${d.id}`, { method: "DELETE" })));
+    setDeletingCompany(false);
+    setConfirmCompany(null);
     load();
   }
 
@@ -456,6 +468,13 @@ export default function PeriodsContent() {
                 <Building2 size={14} className="text-primary" />
                 <span className="font-semibold text-sm text-primary">{company}</span>
                 <span className="text-xs text-muted-foreground">({rows.length} فترة)</span>
+                <button
+                  onClick={() => setConfirmCompany(company)}
+                  className="mr-auto p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                  title="حذف كل فترات الشركة"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
               <table className="w-full text-sm">
                 <thead>
@@ -522,6 +541,34 @@ export default function PeriodsContent() {
               <button onClick={handleDeletePeriod} disabled={deleting}
                 className="px-4 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-60">
                 {deleting ? "جارٍ الحذف..." : "حذف"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card rounded-2xl border shadow-lg w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-red-100 dark:bg-red-950/40">
+                <Building2 size={18} className="text-red-500" />
+              </div>
+              <h2 className="font-bold">حذف كل فترات الشركة</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              هل تريد حذف <span className="font-semibold text-foreground">جميع الفترات</span> لشركة{" "}
+              <span className="font-semibold text-foreground">{confirmCompany}</span>؟
+              <span className="text-red-500 text-xs mt-1 block">
+                سيتم حذف {datasets.filter((d) => d.companyName === confirmCompany).length} فترة. لا يمكن التراجع عن هذا الإجراء.
+              </span>
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmCompany(null)} disabled={deletingCompany}
+                className="px-4 py-2 rounded-lg text-sm border hover:bg-muted transition-colors">إلغاء</button>
+              <button onClick={handleDeleteCompany} disabled={deletingCompany}
+                className="px-4 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-60">
+                {deletingCompany ? "جارٍ الحذف..." : "حذف الكل"}
               </button>
             </div>
           </div>
