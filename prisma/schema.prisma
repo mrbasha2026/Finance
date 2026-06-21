@@ -25,6 +25,7 @@ model User {
   auditLogs         AuditLog[]
   companies         Company[]  @relation("CompanyCreator")
   pnlDatasets       PnLDataset[] @relation("DatasetCreator")
+  userCompanies     UserCompany[]
 }
 
 model Role {
@@ -58,6 +59,17 @@ model Company {
   pnlDatasets     PnLDataset[]
   categories      Category[]
   prepaidExpenses PrepaidExpense[]
+  userCompanies   UserCompany[]
+}
+
+model UserCompany {
+  userId    String
+  companyId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
 }
 
 model PnLDataset {

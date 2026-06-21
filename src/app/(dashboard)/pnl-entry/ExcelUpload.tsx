@@ -237,7 +237,7 @@ function PnLKeySelect({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-card border rounded-xl shadow-xl overflow-hidden">
+        <div className="relative left-0 top-full mt-1 z-50 w-80 bg-card border rounded-xl shadow-xl overflow-hidden">
 
           {/* ── Add form ── */}
           {showForm ? (

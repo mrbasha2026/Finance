@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessibleCompanyIds } from "@/lib/company-access";
 import { z } from "zod";
 import { totalDayUnits } from "@/lib/prepaid-utils";
 
@@ -25,7 +26,13 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const accessibleIds = await getAccessibleCompanyIds(
+      session.user.id,
+      session.user.permissions
+    );
+
     const expenses = await prisma.prepaidExpense.findMany({
+      where: accessibleIds !== null ? { companyId: { in: accessibleIds } } : undefined,
       orderBy: { createdAt: "desc" },
       include: { company: { select: { id: true, name: true, color: true } } },
     });

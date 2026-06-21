@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Users, Plus, Trash2, Shield, ShieldOff, Pencil, UserX, UserCheck, ShieldAlert } from "lucide-react";
+import { Users, Plus, Trash2, Shield, ShieldOff, Pencil, UserX, UserCheck, ShieldAlert, Building2 } from "lucide-react";
 import { SkeletonTable } from "@/components/shared/SkeletonLoaders";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { ErrorState } from "@/components/shared/ErrorState";
@@ -18,10 +18,12 @@ interface User {
   userRoles: { role: { id: string; name: string } }[];
 }
 interface Role { id: string; name: string; }
+interface Company { id: string; name: string; color: string; }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -31,19 +33,28 @@ export default function UsersPage() {
   const [form, setForm] = useState({ email: "", name: "", password: "", roleId: "" });
   const [editForm, setEditForm] = useState({ name: "", email: "", roleId: "" });
 
+  // Company assignment dialog state
+  const [companyTarget, setCompanyTarget] = useState<User | null>(null);
+  const [assignedIds, setAssignedIds] = useState<string[]>([]);
+  const [assignAll, setAssignAll] = useState(false);
+  const [savingCompanies, setSavingCompanies] = useState(false);
+
   async function load() {
     setLoading(true);
     setError(false);
     try {
-      const [uRes, rRes] = await Promise.all([
+      const [uRes, rRes, cRes] = await Promise.all([
         fetch("/api/users"),
         fetch("/api/roles"),
+        fetch("/api/companies"),
       ]);
-      if (!uRes.ok || !rRes.ok) throw new Error("fetch failed");
+      if (!uRes.ok || !rRes.ok || !cRes.ok) throw new Error("fetch failed");
       const { users: u } = await uRes.json();
       const { roles: r } = await rRes.json();
+      const { companies: c } = await cRes.json();
       setUsers(u ?? []);
       setRoles(r ?? []);
+      setCompanies(c ?? []);
     } catch {
       setError(true);
     } finally {
@@ -116,6 +127,45 @@ export default function UsersPage() {
     } else toast.error("حدث خطأ");
   }
 
+  async function openCompanyDialog(u: User) {
+    setCompanyTarget(u);
+    setAssignAll(false);
+    setAssignedIds([]);
+    const res = await fetch(`/api/users/${u.id}/companies`);
+    if (res.ok) {
+      const { companyIds } = await res.json();
+      if (companyIds.length === companies.length && companies.length > 0) {
+        setAssignAll(true);
+      } else {
+        setAssignedIds(companyIds);
+      }
+    }
+  }
+
+  function toggleCompany(id: string) {
+    setAssignedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  async function saveCompanies() {
+    if (!companyTarget) return;
+    setSavingCompanies(true);
+    const ids = assignAll ? companies.map((c) => c.id) : assignedIds;
+    const res = await fetch(`/api/users/${companyTarget.id}/companies`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyIds: ids }),
+    });
+    setSavingCompanies(false);
+    if (res.ok) {
+      toast.success("تم حفظ صلاحيات الشركات");
+      setCompanyTarget(null);
+    } else {
+      toast.error("حدث خطأ أثناء الحفظ");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -132,7 +182,7 @@ export default function UsersPage() {
 
       {loading ? <SkeletonTable rows={5} /> : error ? <ErrorState onRetry={load} /> : (
         <div className="rounded-xl border overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[700px]">
             <thead className="bg-muted/50 border-b">
               <tr>
                 <th className="text-right px-4 py-3 font-semibold">المستخدم</th>
@@ -191,7 +241,6 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      {/* تعديل البيانات */}
                       <button
                         onClick={() => openEdit(u)}
                         title="تعديل بيانات المستخدم"
@@ -199,7 +248,14 @@ export default function UsersPage() {
                       >
                         <Pencil size={14} />
                       </button>
-                      {/* إلغاء / تنشيط */}
+                      {/* تخصيص الشركات */}
+                      <button
+                        onClick={() => openCompanyDialog(u)}
+                        title="تخصيص الشركات"
+                        className="p-1.5 hover:bg-teal-50 dark:hover:bg-teal-950/30 rounded text-teal-600"
+                      >
+                        <Building2 size={14} />
+                      </button>
                       <button
                         onClick={() => toggleActive(u)}
                         title={u.isActive ? "إلغاء تنشيط المستخدم" : "تنشيط المستخدم"}
@@ -207,7 +263,6 @@ export default function UsersPage() {
                       >
                         {u.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
                       </button>
-                      {/* إجبار 2FA */}
                       <button
                         onClick={() => toggleForce2FA(u)}
                         title={u.twoFactorForced ? "إلغاء إجبار المصادقة الثنائية" : "إجبار المصادقة الثنائية"}
@@ -215,7 +270,6 @@ export default function UsersPage() {
                       >
                         <ShieldAlert size={14} />
                       </button>
-                      {/* حذف */}
                       <button
                         onClick={() => setDeleteTarget(u.id)}
                         title="حذف المستخدم"
@@ -326,6 +380,79 @@ export default function UsersPage() {
             <div className="flex justify-end gap-2 mt-5">
               <button onClick={() => setEditUser(null)} className="px-4 py-2 text-sm rounded-lg border hover:bg-muted">إلغاء</button>
               <button onClick={handleEdit} className="px-4 py-2 text-sm rounded-lg bg-primary text-white hover:bg-primary/90 font-medium">حفظ</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة تخصيص الشركات */}
+      {companyTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card rounded-2xl border p-6 w-full max-w-md shadow-lg">
+            <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+              <Building2 size={18} className="text-teal-600" />
+              صلاحيات الشركات
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              المستخدم: <span className="font-semibold text-foreground">{companyTarget.name}</span>
+            </p>
+
+            {/* خيار الكل */}
+            <label className="flex items-center gap-3 px-3 py-2.5 rounded-lg border-2 border-primary/30 bg-primary/5 mb-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={assignAll}
+                onChange={(e) => {
+                  setAssignAll(e.target.checked);
+                  if (e.target.checked) setAssignedIds([]);
+                }}
+                className="w-4 h-4 accent-primary"
+              />
+              <span className="text-sm font-semibold">جميع الشركات (الكل)</span>
+            </label>
+
+            {/* قائمة الشركات */}
+            <div className="space-y-1.5 max-h-56 overflow-y-auto">
+              {companies.map((c) => (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                    assignAll ? "opacity-40 pointer-events-none" : "hover:bg-muted/50"
+                  } ${assignedIds.includes(c.id) ? "border-primary/40 bg-primary/5" : "border-transparent"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={assignAll || assignedIds.includes(c.id)}
+                    onChange={() => toggleCompany(c.id)}
+                    disabled={assignAll}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: c.color }}
+                  />
+                  <span className="text-sm">{c.name}</span>
+                </label>
+              ))}
+              {companies.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-4">لا توجد شركات</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setCompanyTarget(null)}
+                className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={saveCompanies}
+                disabled={savingCompanies}
+                className="px-4 py-2 text-sm rounded-lg bg-primary text-white hover:bg-primary/90 font-medium disabled:opacity-60 disabled:pointer-events-none"
+              >
+                {savingCompanies ? "جارٍ الحفظ..." : "حفظ"}
+              </button>
             </div>
           </div>
         </div>

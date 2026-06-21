@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessibleCompanyIds } from "@/lib/company-access";
 import { z } from "zod";
 
 const schema = z.object({
@@ -18,7 +19,13 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const accessibleIds = await getAccessibleCompanyIds(
+      session.user.id,
+      session.user.permissions
+    );
+
     const companies = await prisma.company.findMany({
+      where: accessibleIds !== null ? { id: { in: accessibleIds } } : undefined,
       orderBy: { name: "asc" },
       include: {
         _count: { select: { pnlDatasets: true } },

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { inferCalculatedRows } from "@/lib/pnl-calculations";
+import { getAccessibleCompanyIds } from "@/lib/company-access";
 import { z } from "zod";
 
 const lineItemSchema = z.object({
@@ -44,7 +45,13 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const accessibleIds = await getAccessibleCompanyIds(
+      session.user.id,
+      session.user.permissions
+    );
+
     const datasets = await prisma.pnLDataset.findMany({
+      where: accessibleIds !== null ? { companyId: { in: accessibleIds } } : undefined,
       orderBy: [{ companyName: "asc" }, { period: "desc" }],
       include: { company: { select: { color: true, currency: true } } },
     });
