@@ -1,17 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { toast } from "sonner";
-import { Shield, QrCode } from "lucide-react";
+import { Shield, QrCode, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 
-type Step = "intro" | "scan" | "verify";
+type Step = "intro" | "scan" | "verify" | "done";
 
 export default function TwoFactorSetupPage() {
-  const router = useRouter();
-  const { update } = useSession();
   const [step, setStep] = useState<Step>("intro");
   const [qrData, setQrData] = useState<{ qrDataUrl: string; secret: string } | null>(null);
   const [otp, setOtp] = useState("");
@@ -41,8 +38,7 @@ export default function TwoFactorSetupPage() {
       toast.error(d.error ?? "رمز غير صحيح");
       return;
     }
-    await update({ twoFactorEnabled: true });
-    router.push("/2fa-verify");
+    setStep("done");
   }
 
   return (
@@ -69,12 +65,16 @@ export default function TwoFactorSetupPage() {
             className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
             style={{ background: "linear-gradient(135deg, var(--brand-green-deep), var(--brand-green))" }}
           >
-            <Shield size={28} className="text-white" />
+            {step === "done" ? <CheckCircle2 size={28} className="text-white" /> : <Shield size={28} className="text-white" />}
           </div>
 
-          <h2 className="text-xl font-black text-gray-900 mb-1">إعداد المصادقة الثنائية</h2>
+          <h2 className="text-xl font-black text-gray-900 mb-1">
+            {step === "done" ? "تم التفعيل بنجاح!" : "إعداد المصادقة الثنائية"}
+          </h2>
           <p className="text-sm text-gray-400 mb-6">
-            يتطلب النظام تفعيل المصادقة الثنائية لحماية حسابك
+            {step === "done"
+              ? "سجّل دخولك مجدداً لاستكمال الإعداد"
+              : "يتطلب النظام تفعيل المصادقة الثنائية لحماية حسابك"}
           </p>
 
           {step === "intro" && (
@@ -143,6 +143,16 @@ export default function TwoFactorSetupPage() {
                 ← رجوع
               </button>
             </div>
+          )}
+
+          {step === "done" && (
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white"
+              style={{ background: "linear-gradient(135deg, var(--brand-green-deep), var(--brand-green))" }}
+            >
+              تسجيل الدخول مجدداً
+            </button>
           )}
         </div>
       </motion.div>
