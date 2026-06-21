@@ -299,7 +299,7 @@ export function LabelMappingsTab() {
             </tbody>
           </table>
           {filtered.length === 0 && search && (
-            <p className="text-center text-xs text-muted-foreground py-6">لا توجد نتائج لـ "{search}"</p>
+            <p className="text-center text-xs text-muted-foreground py-6">لا توجد نتائج لـ &ldquo;{search}&rdquo;</p>
           )}
         </div>
       )}
