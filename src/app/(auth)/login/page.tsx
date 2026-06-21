@@ -47,8 +47,10 @@ export default function LoginPage() {
       const sessionData = await sessionRes.json();
       const user = sessionData?.user;
 
-      if (user?.twoFactorEnabled || user?.twoFactorForced) {
+      if (user?.twoFactorEnabled) {
         router.push("/2fa-verify");
+      } else if (user?.twoFactorForced) {
+        router.push("/2fa-setup");
       } else {
         router.push("/dashboard");
       }

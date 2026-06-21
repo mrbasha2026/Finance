@@ -6,6 +6,15 @@ export default withAuth(
     const token = req.nextauth.token;
     const { pathname } = req.nextUrl;
 
+    // Force 2FA setup: if system requires 2FA and user hasn't set it up yet
+    if (
+      token?.twoFactorForced &&
+      !token?.twoFactorEnabled &&
+      pathname !== "/2fa-setup"
+    ) {
+      return NextResponse.redirect(new URL("/2fa-setup", req.url));
+    }
+
     // Admin-only routes
     const adminRoutes = ["/users", "/roles", "/audit", "/settings"];
     if (adminRoutes.some((r) => pathname.startsWith(r))) {

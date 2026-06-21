@@ -6,7 +6,6 @@ import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 import { ShieldCheck, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
-import Image from "next/image";
 
 export default function TwoFactorVerifyPage() {
   const router = useRouter();
@@ -62,7 +61,8 @@ export default function TwoFactorVerifyPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-sm text-center"
       >
-        <Image src="/logo.svg" alt="DealzTree" width={160} height={58} className="mx-auto mb-8" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-dealztree.png" alt="DealzTree" style={{ width: 220, height: 82, objectFit: "contain", display: "inline-block" }} className="mx-auto mb-8" />
 
         <div className="bg-white rounded-2xl p-8 shadow-[0_4px_32px_rgba(0,0,0,0.08)] border border-gray-100/80">
           <div

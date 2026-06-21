@@ -84,7 +84,7 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.roles = user.roles;
@@ -92,6 +92,11 @@ export const authOptions: NextAuthOptions = {
         token.twoFactorEnabled = user.twoFactorEnabled;
         token.twoFactorForced = user.twoFactorForced;
         token.twoFactorVerified = false;
+      }
+      // When client calls update(), refresh twoFactorEnabled from DB
+      if (trigger === "update" && token.id) {
+        const dbUser = await prisma.user.findUnique({ where: { id: token.id as string } });
+        if (dbUser) token.twoFactorEnabled = dbUser.twoFactorEnabled;
       }
       return token;
     },
