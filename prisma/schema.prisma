@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  name              String
+  password          String
+  twoFactorEnabled  Boolean    @default(false)
+  twoFactorSecret   String?
+  twoFactorForced   Boolean    @default(false)
+  isActive          Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  userRoles         UserRole[]
+  auditLogs         AuditLog[]
+  companies         Company[]  @relation("CompanyCreator")
+  pnlDatasets       PnLDataset[] @relation("DatasetCreator")
+}
+
+model Role {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  permissions Json       @default("[]")
+  createdAt   DateTime   @default(now())
+
+  userRoles   UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#0d9488")
+  currency    String   @default("SAR")
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  createdBy       User?          @relation("CompanyCreator", fields: [createdById], references: [id])
+  pnlDatasets     PnLDataset[]
+  categories      Category[]
+  prepaidExpenses PrepaidExpense[]
+}
+
+model PnLDataset {
+  id          String   @id @default(cuid())
+  companyId   String
+  companyName String
+  period      String   // "YYYY-MM"
+  currency    String   @default("SAR")
+  parsed      Json     // { lineItems: [{key, amount}] }
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User?    @relation("DatasetCreator", fields: [createdById], references: [id])
+
+  @@unique([companyId, period])
+}
+
+model JournalEntry {
+  id            String   @id @default(cuid())
+  companyName   String
+  period        String
+  date          DateTime
+  entryNumber   String
+  accountKey    String
+  accountNameAr String
+  description   String?
+  debit         Float    @default(0)
+  credit        Float    @default(0)
+  reference     String?
+  currency      String   @default("SAR")
+  createdAt     DateTime @default(now())
+}
+
+model Category {
+  id           String     @id @default(cuid())
+  name         String
+  nameAr       String
+  type         String     // "revenue" | "expense" | "profit"
+  parentId     String?
+  companyId    String?
+  pnlKey       String?    // stable key used in PnLDataset storage (e.g. "sales_revenue")
+  sortOrder    Int        @default(0)
+  isCalculated Boolean    @default(false) // true = formula-based (profit rows), non-leaf = always summed
+  isTotal      Boolean    @default(false) // top-level bold row
+  isSubtotal   Boolean    @default(false) // section subtotal
+  createdAt    DateTime   @default(now())
+
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  company   Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model PrepaidExpense {
+  id            String   @id @default(cuid())
+  companyId     String
+  vendorName    String
+  amount        Float
+  currency      String   @default("SAR")
+  startDate     DateTime
+  endDate       DateTime
+  monthlyAmount Float
+  description   String?
+  status        String   @default("active") // "active" | "completed"
+  type          String   @default("أخرى")  // "إيجار"|"تأمين"|"اشتراكات"|"صيانة"|"ترخيص"|"دعاية"|"أخرى"
+  nameAr        String?
+  createdAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String?
+  action    String
+  module    String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model LabelMapping {
+  id        String   @id @default(cuid())
+  label     String   @unique
+  pnlKey    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SystemSettings {
+  id              String   @id @default("singleton")
+  zakatRate       Float    @default(0.025)
+  defaultCurrency String   @default("SAR")
+  force2FA        Boolean  @default(false)
+  fiscalYearStart Int      @default(1) // 1 = January
+  aiProvider      String   @default("anthropic")
+  aiModel         String   @default("claude-haiku-4-5")
+  aiApiKey        String?  // legacy field — kept for migration
+  anthropicKey    String?
+  openaiKey       String?
+  googleKey       String?
+  updatedAt       DateTime @updatedAt
+}

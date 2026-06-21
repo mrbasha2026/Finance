@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 90" role="img" aria-label="DealzTree">
+
+  <!-- Green "d" block — square with folded top-right corner -->
+  <g>
+    <path d="M4 8 Q4 2 10 2 L56 2 L66 12 L66 76 Q66 82 60 82 L10 82 Q4 82 4 76 Z" fill="#9fc552"/>
+    <!-- fold triangle -->
+    <path d="M56 2 L66 12 L56 12 Z" fill="#7aab2e"/>
+    <!-- White "d" letter -->
+    <text x="35" y="60" text-anchor="middle"
+          font-family="'Arial Black', 'Helvetica Neue', Helvetica, sans-serif"
+          font-size="54" font-weight="900" fill="white" letter-spacing="-2">d</text>
+  </g>
+
+  <!-- dealz -->
+  <text x="78" y="43"
+        font-family="'Arial Black', 'Helvetica Neue', Helvetica, sans-serif"
+        font-size="30" font-weight="900" fill="#1a1a1a" letter-spacing="-1">dealz</text>
+
+  <!-- tree -->
+  <text x="78" y="73"
+        font-family="'Arial Black', 'Helvetica Neue', Helvetica, sans-serif"
+        font-size="30" font-weight="900" fill="#1a1a1a" letter-spacing="-1">tree</text>
+
+  <!-- Arabic row: line — ديلزتري ® — line -->
+  <line x1="78" y1="84" x2="96" y2="84" stroke="#999" stroke-width="0.8"/>
+  <text x="175" y="87" text-anchor="middle"
+        font-family="'Tajawal', 'Arial', sans-serif"
+        font-size="11" fill="#666" letter-spacing="2">ديلزتري</text>
+  <text x="232" y="87" font-family="Arial, sans-serif" font-size="8" fill="#888">®</text>
+  <line x1="230" y1="84" x2="248" y2="84" stroke="#999" stroke-width="0.8"/>
+</svg>
