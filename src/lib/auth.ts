@@ -45,41 +45,45 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        try {
+          if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-          include: {
-            userRoles: { include: { role: true } },
-          },
-        });
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email },
+            include: {
+              userRoles: { include: { role: true } },
+            },
+          });
 
-        if (!user) return null;
+          if (!user) return null;
 
-        const valid = await bcrypt.compare(credentials.password, user.password);
-        if (!valid) return null;
+          const valid = await bcrypt.compare(credentials.password, user.password);
+          if (!valid) return null;
 
-        const roles = user.userRoles.map((ur) => ur.role.name);
-        const permissions = [
-          ...new Set(
-            user.userRoles.flatMap((ur) => ur.role.permissions as string[])
-          ),
-        ];
+          const roles = user.userRoles.map((ur) => ur.role.name);
+          const permissions = [
+            ...new Set(
+              user.userRoles.flatMap((ur) => ur.role.permissions as string[])
+            ),
+          ];
 
-        // Check system-level force2FA
-        const settings = await prisma.systemSettings.findUnique({
-          where: { id: "singleton" },
-        });
+          const settings = await prisma.systemSettings.findUnique({
+            where: { id: "singleton" },
+          });
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          roles,
-          permissions,
-          twoFactorEnabled: user.twoFactorEnabled,
-          twoFactorForced: settings?.force2FA ?? false,
-        };
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            roles,
+            permissions,
+            twoFactorEnabled: user.twoFactorEnabled,
+            twoFactorForced: settings?.force2FA ?? false,
+          };
+        } catch (error) {
+          console.error("[authorize] DB error:", error);
+          return null;
+        }
       },
     }),
   ],
