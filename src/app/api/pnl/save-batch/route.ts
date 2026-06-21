@@ -17,6 +17,7 @@ const datasetSchema = z.object({
   period: z.string().min(1),
   currency: z.string().min(1),
   lineItems: z.array(lineItemSchema).min(1),
+  mode: z.enum(["merge", "replace"]).default("replace"),
 });
 
 const journalEntrySchema = z.object({
@@ -101,7 +102,20 @@ export async function POST(req: NextRequest) {
         rawData[item.key] = item.amount;
       }
       const fullData = inferCalculatedRows(rawData);
-      const lineItems = Object.entries(fullData).map(([key, amount]) => ({ key, amount }));
+      let lineItems = Object.entries(fullData).map(([key, amount]) => ({ key, amount }));
+
+      if (ds.mode === "merge") {
+        const existing = await prisma.pnLDataset.findUnique({
+          where: { companyId_period: { companyId, period: ds.period } },
+          select: { parsed: true },
+        });
+        if (existing) {
+          const existingItems = (existing.parsed as { lineItems: { key: string; amount: number }[] })?.lineItems ?? [];
+          const merged = new Map(existingItems.map(({ key, amount }) => [key, amount]));
+          for (const { key, amount } of lineItems) merged.set(key, amount);
+          lineItems = Array.from(merged.entries()).map(([key, amount]) => ({ key, amount }));
+        }
+      }
 
       const saved = await prisma.pnLDataset.upsert({
         where: { companyId_period: { companyId, period: ds.period } },

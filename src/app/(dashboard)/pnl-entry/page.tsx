@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { PnLManualForm } from "./PnLManualForm";
 import { ExcelUpload } from "./ExcelUpload";
-import { PenLine, Upload, CalendarDays } from "lucide-react";
+import { LabelMappingsTab } from "./LabelMappingsTab";
+import { PenLine, Upload, CalendarDays, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PeriodsContent from "./PeriodsContent";
 
-type Tab = "periods" | "excel" | "manual";
+type Tab = "periods" | "excel" | "manual" | "mappings";
 
 export default function PnLEntryPage() {
   const [activeTab, setActiveTab] = useState<Tab>("periods");
@@ -26,9 +27,10 @@ export default function PnLEntryPage() {
       {/* Tabs */}
       <div className="flex border-b gap-1">
         {([
-          { key: "periods" as Tab, label: "إدارة الفترات", icon: CalendarDays },
-          { key: "excel"   as Tab, label: "رفع ملف",       icon: Upload },
-          { key: "manual"  as Tab, label: "إدخال يدوي",    icon: PenLine },
+          { key: "periods"  as Tab, label: "إدارة الفترات", icon: CalendarDays },
+          { key: "excel"    as Tab, label: "رفع ملف",       icon: Upload },
+          { key: "manual"   as Tab, label: "إدخال يدوي",    icon: PenLine },
+          { key: "mappings" as Tab, label: "فهرس الربط",    icon: Link2 },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -47,9 +49,10 @@ export default function PnLEntryPage() {
       </div>
 
       <div className="fade-in">
-        {activeTab === "periods" && <PeriodsContent />}
-        {activeTab === "excel"   && <ExcelUpload />}
-        {activeTab === "manual"  && <PnLManualForm />}
+        {activeTab === "periods"  && <PeriodsContent />}
+        {activeTab === "excel"    && <ExcelUpload />}
+        {activeTab === "manual"   && <PnLManualForm />}
+        {activeTab === "mappings" && <LabelMappingsTab />}
       </div>
     </div>
   );

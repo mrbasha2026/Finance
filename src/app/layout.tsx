@@ -13,8 +13,8 @@ export const metadata: Metadata = {
     title: "Dealztree",
   },
   icons: {
-    apple: "/logo-dealztree-app.png",
-    icon: "/logo-dealztree-app.png",
+    apple: "/icons/icon-192.png",
+    icon:  "/icons/favicon-32.png",
   },
 };
 

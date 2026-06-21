@@ -61,6 +61,7 @@ interface SaveDataset {
   period:      string;
   currency:    string;
   lineItems:   { key: string; amount: number }[];
+  mode:        "merge" | "replace";
 }
 
 // ── Column name map ────────────────────────────────────────────────────────────
@@ -236,6 +237,8 @@ export function ExcelUpload() {
   const [companyMap,   setCompanyMap]   = useState<Record<string, string>>({});
   const [selected,     setSelected]     = useState<Set<string>>(new Set());
   const [saving,       setSaving]       = useState(false);
+  const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
+  const [mode,         setMode]         = useState<"merge" | "replace">("replace");
 
   useEffect(() => {
     fetch("/api/companies")
@@ -253,6 +256,15 @@ export function ExcelUpload() {
     fetch("/api/pnl/label-mappings")
       .then((r) => r.json())
       .then((d) => setDbMappings(d.mappings ?? {}));
+
+    fetch("/api/pnl/save-batch")
+      .then((r) => r.json())
+      .then((d) => {
+        const keys = new Set<string>(
+          (d.datasets ?? []).map((ds: { companyId: string; period: string }) => `${ds.companyId}_${ds.period}`)
+        );
+        setExistingKeys(keys);
+      });
   }, []);
 
   // ── Parse uploaded file ──────────────────────────────────────────────────────
@@ -508,6 +520,7 @@ export function ExcelUpload() {
           period:      ps.period,
           currency:    group.currency,
           lineItems,
+          mode: isPeriodExisting(group.companyName, ps.period) ? mode : "replace",
         });
       }
     }
@@ -535,8 +548,17 @@ export function ExcelUpload() {
     }
   }
 
+  function isPeriodExisting(companyName: string, period: string): boolean {
+    const cId = companyMap[companyName];
+    return !!cId && existingKeys.has(`${cId}_${period}`);
+  }
+
   // ── Derived ──────────────────────────────────────────────────────────────────
   const totalSelected = selected.size;
+  const hasExistingSelected = [...selected].some((key) => {
+    const sep = key.indexOf("::");
+    return isPeriodExisting(key.slice(0, sep), key.slice(sep + 2));
+  });
 
   function pendingUnmapped(group: CompanyGroup) {
     return group.unmappedAccounts.filter(
@@ -648,8 +670,9 @@ export function ExcelUpload() {
                 {/* Period chips */}
                 <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2">
                   {group.periods.map((ps) => {
-                    const key   = `${group.companyName}::${ps.period}`;
-                    const isSel = selected.has(key);
+                    const key      = `${group.companyName}::${ps.period}`;
+                    const isSel    = selected.has(key);
+                    const isExist  = isPeriodExisting(group.companyName, ps.period);
                     return (
                       <button
                         key={ps.period}
@@ -663,6 +686,11 @@ export function ExcelUpload() {
                         {isSel && <Check size={10} />}
                         {ps.period}
                         <span className="opacity-60">({ps.entryCount} قيد)</span>
+                        {isExist && (
+                          <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            موجود
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -722,8 +750,37 @@ export function ExcelUpload() {
             );
           })}
 
-          {/* Save button */}
-          <div className="flex justify-end pt-1">
+          {/* Save area */}
+          <div className="flex items-center justify-between gap-4 pt-1 flex-wrap">
+            {hasExistingSelected ? (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">للفترات الموجودة:</span>
+                <div className="flex rounded-lg border overflow-hidden">
+                  <button
+                    onClick={() => setMode("merge")}
+                    className={`px-3 py-1.5 font-medium transition-colors ${
+                      mode === "merge"
+                        ? "bg-primary text-white"
+                        : "hover:bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    دمج
+                  </button>
+                  <button
+                    onClick={() => setMode("replace")}
+                    className={`px-3 py-1.5 font-medium transition-colors border-r ${
+                      mode === "replace"
+                        ? "bg-destructive text-white"
+                        : "hover:bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    استبدال
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <span />
+            )}
             <button
               onClick={handleSave}
               disabled={saving || totalSelected === 0}

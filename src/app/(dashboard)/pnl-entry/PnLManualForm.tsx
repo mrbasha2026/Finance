@@ -58,16 +58,23 @@ export function PnLManualForm() {
   const [saving, setSaving] = useState(false);
   const [zakatRate, setZakatRate] = useState(0.025);
   const [loading, setLoading] = useState(true);
+  const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/companies").then((r) => r.json()),
       fetch("/api/categories").then((r) => r.json()),
-      fetch("/api/admin/settings").then((r) => r.json()),
-    ]).then(([comp, cats, settings]) => {
+      fetch("/api/settings").then((r) => r.json()),
+      fetch("/api/pnl/save-batch").then((r) => r.json()),
+    ]).then(([comp, cats, settings, pnl]) => {
       setCompanies(comp.companies ?? []);
       setAllCategories(cats.categories ?? []);
-      if (settings.settings?.zakatRate) setZakatRate(settings.settings.zakatRate);
+      if (settings.zakatRate) setZakatRate(settings.zakatRate);
+      const keys = new Set<string>(
+        (pnl.datasets ?? []).map((d: { companyId: string; period: string }) => `${d.companyId}_${d.period}`)
+      );
+      setExistingKeys(keys);
       setLoading(false);
     });
   }, []);
@@ -92,22 +99,34 @@ export function PnLManualForm() {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!companyId) { toast.error("اختر الشركة"); return; }
     if (!period) { toast.error("اختر الفترة"); return; }
+    if (existingKeys.has(`${companyId}_${period}`)) {
+      setShowDuplicateDialog(true);
+      return;
+    }
+    doSave("replace");
+  }
+
+  async function doSave(mode: "merge" | "replace") {
     const company = companies.find((c) => c.id === companyId);
     if (!company) return;
-
     const lineItems = Object.entries(calculated).map(([key, amount]) => ({ key, amount }));
     setSaving(true);
     const res = await fetch("/api/pnl/save-batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ datasets: [{ companyId, companyName: company.name, period, currency, lineItems }] }),
+      body: JSON.stringify({ datasets: [{ companyId, companyName: company.name, period, currency, lineItems, mode }] }),
     });
     setSaving(false);
-    if (res.ok) { toast.success("تم حفظ البيانات بنجاح"); setValues({}); setCalculated({}); }
-    else toast.error("حدث خطأ أثناء الحفظ");
+    if (res.ok) {
+      toast.success(mode === "merge" ? "تم دمج البيانات بنجاح" : "تم استبدال البيانات بنجاح");
+      setValues({});
+      setCalculated({});
+    } else {
+      toast.error("حدث خطأ أثناء الحفظ");
+    }
   }
 
   const rev = calculated["revenue"] ?? 0;
@@ -121,6 +140,36 @@ export function PnLManualForm() {
 
   return (
     <div className="space-y-4">
+      {showDuplicateDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowDuplicateDialog(false)}>
+          <div className="bg-card rounded-2xl border p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold mb-2">بيانات موجودة مسبقاً</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              يوجد إدخال لهذه الشركة وهذه الفترة. كيف تريد المتابعة؟
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={() => { setShowDuplicateDialog(false); doSave("merge"); }}
+                className="w-full px-4 py-2.5 text-sm rounded-lg font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+              >
+                دمج — إضافة القيم الجديدة مع الاحتفاظ بالقديمة
+              </button>
+              <button
+                onClick={() => { setShowDuplicateDialog(false); doSave("replace"); }}
+                className="w-full px-4 py-2.5 text-sm rounded-lg font-medium border border-destructive text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                استبدال — حذف البيانات القديمة والكتابة فوقها
+              </button>
+              <button
+                onClick={() => setShowDuplicateDialog(false)}
+                className="w-full px-4 py-2.5 text-sm rounded-lg border hover:bg-muted transition-colors"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header fields */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-card rounded-xl border">
         <div>
