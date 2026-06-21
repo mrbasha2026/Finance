@@ -141,6 +141,15 @@ export async function POST(req: NextRequest) {
         },
       });
       results.push(saved);
+
+      // Grant the uploader access to this company if they aren't an admin
+      if (!session.user.permissions.includes("companies.manage")) {
+        await prisma.userCompany.upsert({
+          where: { userId_companyId: { userId: session.user.id, companyId } },
+          create: { userId: session.user.id, companyId },
+          update: {},
+        });
+      }
     }
 
     if (journalEntries?.length) {
