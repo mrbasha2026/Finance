@@ -50,6 +50,7 @@ const EMPTY_FORM: NewCatForm = { nameAr: "", name: "", type: "expense" };
 
 export function LabelMappingsTab() {
   const [mappings,    setMappings]    = useState<Mapping[]>([]);
+  const [names,       setNames]       = useState<Record<string, string>>({});
   const [categories,  setCategories]  = useState<LeafCategory[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [search,      setSearch]      = useState("");
@@ -64,6 +65,7 @@ export function LabelMappingsTab() {
     ]).then(([maps, cats]) => {
       const entries = Object.entries(maps.mappings ?? {}) as [string, string][];
       setMappings(entries.map(([label, pnlKey]) => ({ label, pnlKey })));
+      setNames(maps.names ?? {});
       setCategories(extractLeaves(cats.categories ?? []));
       setLoading(false);
     });
@@ -141,6 +143,7 @@ export function LabelMappingsTab() {
     (m) =>
       m.label.toLowerCase().includes(search.toLowerCase()) ||
       m.pnlKey.toLowerCase().includes(search.toLowerCase()) ||
+      (names[m.label] ?? "").includes(search) ||
       (categories.find((c) => c.pnlKey === m.pnlKey)?.nameAr ?? "").includes(search)
   );
 
@@ -197,6 +200,9 @@ export function LabelMappingsTab() {
                     <tr className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs">{m.label}</span>
+                        {names[m.label] && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{names[m.label]}</p>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <select

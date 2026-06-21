@@ -199,9 +199,29 @@ function PnLKeySelect({
           </button>
           <div className="max-h-52 overflow-y-auto">
             {categories.length === 0 ? (
-              <p className="text-center text-xs text-muted-foreground py-4">لا توجد تصنيفات — أضف تصنيفات أولاً</p>
+              <div className="py-4 text-center">
+                <p className="text-xs text-muted-foreground mb-2">لا توجد تصنيفات — أضف تصنيفات أولاً</p>
+                <a
+                  href="/categories"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary hover:underline"
+                >
+                  إضافة تصنيف ←
+                </a>
+              </div>
             ) : filtered.length === 0 ? (
-              <p className="text-center text-xs text-muted-foreground py-4">لا توجد نتائج</p>
+              <div className="py-4 text-center">
+                <p className="text-xs text-muted-foreground mb-2">لا توجد نتائج لـ &ldquo;{query}&rdquo;</p>
+                <a
+                  href="/categories"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary hover:underline"
+                >
+                  إضافة تصنيف جديد ←
+                </a>
+              </div>
             ) : (
               filtered.map((cat) => (
                 <button
@@ -458,16 +478,24 @@ export function ExcelUpload() {
 
   // ── Save ─────────────────────────────────────────────────────────────────────
   async function handleSave() {
-    // 1. Persist new user mappings
+    // 1. Persist new user mappings (with Arabic account names)
     const newMappings: Record<string, string> = {};
+    const newNames:    Record<string, string> = {};
     for (const [accountKey, pnlKey] of Object.entries(userMappings)) {
-      if (!dbMappings[accountKey]) newMappings[accountKey] = pnlKey;
+      if (!dbMappings[accountKey]) {
+        newMappings[accountKey] = pnlKey;
+        // Collect Arabic name for this accountKey from any group
+        for (const group of groups) {
+          const acc = group.unmappedAccounts.find((a) => a.accountKey === accountKey);
+          if (acc?.accountNameAr) { newNames[accountKey] = acc.accountNameAr; break; }
+        }
+      }
     }
     if (Object.keys(newMappings).length > 0) {
       await fetch("/api/pnl/label-mappings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mappings: newMappings }),
+        body: JSON.stringify({ mappings: newMappings, names: newNames }),
       });
       setDbMappings((prev) => ({ ...prev, ...newMappings }));
     }

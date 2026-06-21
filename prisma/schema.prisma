@@ -145,6 +145,7 @@ model AuditLog {
 model LabelMapping {
   id        String   @id @default(cuid())
   label     String   @unique
+  labelAr   String?
   pnlKey    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
