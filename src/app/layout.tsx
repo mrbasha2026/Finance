@@ -4,17 +4,17 @@ import { Providers } from "@/components/providers";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
-  title: "DealzTree — لوحة الأرباح والخسائر",
+  title: "Dealztree",
   description: "نظام إدارة مالية متكامل لمحفظة شركاتك | ديلزتري",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "ديلزتري",
+    title: "Dealztree",
   },
   icons: {
-    apple: "/icons/icon-192.png",
-    icon: "/icons/icon-192.png",
+    apple: "/logo-dealztree-app.png",
+    icon: "/logo-dealztree-app.png",
   },
 };
 

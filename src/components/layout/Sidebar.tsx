@@ -79,14 +79,14 @@ export function Sidebar({ permissions, mobileOpen = false, onMobileClose }: Side
           {collapsed ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src="/logo-dealztree.png"
+              src="/logo-dealztree-app.png"
               alt="DealzTree"
-              style={{ width: 36, height: 36, objectFit: "contain", borderRadius: 8 }}
+              style={{ width: 32, height: 32, objectFit: "contain", borderRadius: 8 }}
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src="/logo-dealztree.png"
+              src="/logo-dealztree-app.png"
               alt="DealzTree"
               style={{ width: 140, height: 50, objectFit: "contain" }}
             />
