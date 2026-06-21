@@ -721,17 +721,24 @@ export function ExcelUpload() {
 
     if (!datasets.length) { toast.error("لا توجد بيانات قابلة للحفظ — تحقق من ربط الحسابات"); return; }
 
+    const MAX_JOURNAL = 5000;
+    const cappedJournalEntries = journalEntries.slice(0, MAX_JOURNAL);
+    const journalTruncated = journalEntries.length > MAX_JOURNAL;
+
     setSaving(true);
     const res = await fetch("/api/pnl/save-batch", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ datasets, journalEntries }),
+      body:    JSON.stringify({ datasets, journalEntries: cappedJournalEntries }),
     });
     setSaving(false);
 
     if (res.ok) {
       const { saved } = await res.json();
       toast.success(`تم حفظ ${saved} فترة بنجاح`);
+      if (journalTruncated) {
+        toast.warning(`تم حفظ أول ${MAX_JOURNAL.toLocaleString()} قيد فقط من أصل ${journalEntries.length.toLocaleString()} — الملف كبير جداً`);
+      }
       setGroups([]);
       setSelected(new Set());
       setCompanyMap({});

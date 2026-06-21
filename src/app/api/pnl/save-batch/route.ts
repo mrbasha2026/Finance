@@ -152,11 +152,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const MAX_JOURNAL_ENTRIES = 5000;
+    let journalSkipped = 0;
     if (journalEntries?.length) {
-      await prisma.journalEntry.createMany({
-        data: journalEntries.map((je) => ({ ...je, date: new Date(je.date) })),
-        skipDuplicates: true,
-      });
+      const capped = journalEntries.slice(0, MAX_JOURNAL_ENTRIES);
+      journalSkipped = journalEntries.length - capped.length;
+      const BATCH = 500;
+      const rows = capped.map((je) => ({ ...je, date: new Date(je.date) }));
+      for (let i = 0; i < rows.length; i += BATCH) {
+        await prisma.journalEntry.createMany({
+          data: rows.slice(i, i + BATCH),
+          skipDuplicates: true,
+        });
+      }
     }
 
     await logAudit({
@@ -167,9 +175,10 @@ export async function POST(req: NextRequest) {
       details: { count: results.length },
     });
 
-    return NextResponse.json({ saved: results.length });
+    return NextResponse.json({ saved: results.length, journalSkipped });
   } catch (error) {
     console.error("[POST /api/pnl/save-batch]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "حدث خطأ في الخادم", debug: msg }, { status: 500 });
   }
 }
