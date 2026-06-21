@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Upload, FileSpreadsheet, Check, Link2, Search, ChevronDown, X, Download } from "lucide-react";
+import { Upload, FileSpreadsheet, Check, Link2, Search, ChevronDown, X, Download, Plus, Loader2 } from "lucide-react";
 import { Company } from "@/lib/pnl-types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -115,18 +115,34 @@ function resolveAccount(
   return null;
 }
 
-// ── Searchable pnlKey selector (unchanged from original) ──────────────────────
+// ── Inline add-category form state ────────────────────────────────────────────
+interface AddCatForm {
+  nameAr:     string;
+  name:       string;
+  type:       string;
+  parentId:   string;
+  isTotal:    boolean;
+  isSubtotal: boolean;
+}
+const EMPTY_ADD: AddCatForm = { nameAr: "", name: "", type: "expense", parentId: "", isTotal: false, isSubtotal: false };
+
+// ── Searchable pnlKey selector ─────────────────────────────────────────────────
 function PnLKeySelect({
-  value, onChange, categories,
+  value, onChange, categories, allCategories, onCategoryCreated,
 }: {
-  value:      string;
-  onChange:   (key: string) => void;
-  categories: LeafCategory[];
+  value:               string;
+  onChange:            (key: string) => void;
+  categories:          LeafCategory[];
+  allCategories:       ApiCategory[];
+  onCategoryCreated:   (cat: LeafCategory) => void;
 }) {
-  const [open,  setOpen]  = useState(false);
-  const [query, setQuery] = useState("");
-  const ref               = useRef<HTMLDivElement>(null);
-  const selected          = categories.find((c) => c.pnlKey === value);
+  const [open,     setOpen]     = useState(false);
+  const [query,    setQuery]    = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [addForm,  setAddForm]  = useState<AddCatForm>(EMPTY_ADD);
+  const [saving,   setSaving]   = useState(false);
+  const ref                     = useRef<HTMLDivElement>(null);
+  const selected                = categories.find((c) => c.pnlKey === value);
 
   const filtered = query.trim()
     ? categories.filter(
@@ -140,17 +156,63 @@ function PnLKeySelect({
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      if (!ref.current?.contains(e.target as Node)) { setOpen(false); setShowForm(false); }
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  function openAddForm() {
+    setAddForm({ ...EMPTY_ADD, nameAr: query });
+    setShowForm(true);
+  }
+
+  async function handleCreate() {
+    if (!addForm.nameAr.trim() || !addForm.name.trim()) {
+      toast.error("الاسم بالعربية والإنجليزية مطلوبان");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/categories", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        name:         addForm.name.trim(),
+        nameAr:       addForm.nameAr.trim(),
+        type:         addForm.type,
+        parentId:     addForm.parentId || null,
+        isCalculated: false,
+        isTotal:      addForm.isTotal,
+        isSubtotal:   addForm.isSubtotal,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      const { category } = await res.json();
+      const leaf: LeafCategory = {
+        id:     category.id,
+        nameAr: category.nameAr,
+        name:   category.name,
+        pnlKey: category.pnlKey,
+        type:   category.type,
+      };
+      onCategoryCreated(leaf);
+      onChange(category.pnlKey);
+      toast.success(`تم إنشاء التصنيف "${category.nameAr}"`);
+      setShowForm(false);
+      setOpen(false);
+      setQuery("");
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error ?? "حدث خطأ أثناء الإنشاء");
+    }
+  }
+
   return (
     <div ref={ref} className="relative min-w-[200px]">
       <button
         type="button"
-        onClick={() => { setOpen((o) => !o); setQuery(""); }}
+        onClick={() => { setOpen((o) => !o); setQuery(""); setShowForm(false); }}
         className={`w-full flex items-center justify-between gap-2 border rounded-lg px-2.5 py-1.5 text-xs bg-background focus:outline-none transition-colors ${
           value
             ? "border-green-300 dark:border-green-700 text-foreground"
@@ -175,70 +237,160 @@ function PnLKeySelect({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-72 bg-card border rounded-xl shadow-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30">
-            <Search size={13} className="text-muted-foreground flex-shrink-0" />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث بالعربي أو الإنجليزي..."
-              className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
-            />
-            {query && (
-              <button onClick={() => setQuery("")}>
-                <X size={11} className="text-muted-foreground" />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => { onChange(""); setOpen(false); }}
-            className="w-full text-right px-3 py-2 text-xs text-muted-foreground hover:bg-muted transition-colors border-b"
-          >
-            — تجاهل هذا الحساب
-          </button>
-          <div className="max-h-52 overflow-y-auto">
-            {categories.length === 0 ? (
-              <div className="py-4 text-center">
-                <p className="text-xs text-muted-foreground mb-2">لا توجد تصنيفات — أضف تصنيفات أولاً</p>
-                <a
-                  href="/categories"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-primary hover:underline"
-                >
-                  إضافة تصنيف ←
-                </a>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="py-4 text-center">
-                <p className="text-xs text-muted-foreground mb-2">لا توجد نتائج لـ &ldquo;{query}&rdquo;</p>
-                <a
-                  href="/categories"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-primary hover:underline"
-                >
-                  إضافة تصنيف جديد ←
-                </a>
-              </div>
-            ) : (
-              filtered.map((cat) => (
-                <button
-                  key={cat.pnlKey}
-                  onClick={() => { onChange(cat.pnlKey); setOpen(false); setQuery(""); }}
-                  className={`w-full text-right px-3 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between gap-2 ${
-                    cat.pnlKey === value ? "bg-primary/10 text-primary font-medium" : ""
-                  }`}
-                >
-                  <span className="truncate">{cat.nameAr}</span>
-                  <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono opacity-60">
-                    {cat.pnlKey}
-                  </span>
+        <div className="absolute left-0 top-full mt-1 z-50 w-80 bg-card border rounded-xl shadow-xl overflow-hidden">
+
+          {/* ── Add form ── */}
+          {showForm ? (
+            <div className="p-3 space-y-2.5">
+              <div className="flex items-center justify-between pb-2 border-b">
+                <span className="text-xs font-semibold">إضافة بند جديد</span>
+                <button onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground">
+                  <X size={13} />
                 </button>
-              ))
-            )}
-          </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-1">الاسم بالعربية *</label>
+                <input
+                  autoFocus
+                  value={addForm.nameAr}
+                  onChange={(e) => setAddForm((f) => ({ ...f, nameAr: e.target.value }))}
+                  placeholder="مصروفات التسويق"
+                  className="w-full border rounded-lg px-2.5 py-1.5 text-xs bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-1">الاسم بالإنجليزية *</label>
+                <input
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Marketing Expenses"
+                  className="w-full border rounded-lg px-2.5 py-1.5 text-xs bg-background font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-1">النوع</label>
+                <select
+                  value={addForm.type}
+                  onChange={(e) => setAddForm((f) => ({ ...f, type: e.target.value }))}
+                  className="w-full border rounded-lg px-2.5 py-1.5 text-xs bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="revenue">إيراد</option>
+                  <option value="expense">مصروف</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-1">تحت بند (اختياري)</label>
+                <select
+                  value={addForm.parentId}
+                  onChange={(e) => setAddForm((f) => ({ ...f, parentId: e.target.value }))}
+                  className="w-full border rounded-lg px-2.5 py-1.5 text-xs bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="">— بند رئيسي (بدون أب) —</option>
+                  {allCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nameAr}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-4 pt-0.5">
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={addForm.isTotal}
+                    onChange={(e) => setAddForm((f) => ({ ...f, isTotal: e.target.checked }))}
+                    className="rounded"
+                  />
+                  إجمالي رئيسي (bold)
+                </label>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={addForm.isSubtotal}
+                    onChange={(e) => setAddForm((f) => ({ ...f, isSubtotal: e.target.checked }))}
+                    className="rounded"
+                  />
+                  إجمالي فرعي
+                </label>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleCreate}
+                  disabled={saving || !addForm.nameAr.trim() || !addForm.name.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium"
+                >
+                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                  إضافة
+                </button>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="px-3 py-1.5 text-xs border rounded-lg hover:bg-muted"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+
+          ) : (
+            /* ── Search + list ── */
+            <>
+              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30">
+                <Search size={13} className="text-muted-foreground flex-shrink-0" />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="ابحث بالعربي أو الإنجليزي..."
+                  className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+                />
+                {query && (
+                  <button onClick={() => setQuery("")}>
+                    <X size={11} className="text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => { onChange(""); setOpen(false); }}
+                className="w-full text-right px-3 py-2 text-xs text-muted-foreground hover:bg-muted transition-colors border-b"
+              >
+                — تجاهل هذا الحساب
+              </button>
+              <div className="max-h-52 overflow-y-auto">
+                {filtered.length === 0 ? (
+                  <div className="py-3 text-center space-y-1.5">
+                    <p className="text-xs text-muted-foreground">
+                      {query.trim() ? `لا توجد نتائج لـ "${query}"` : "لا توجد تصنيفات"}
+                    </p>
+                    <button
+                      onClick={openAddForm}
+                      className="flex items-center gap-1 text-xs text-primary hover:underline mx-auto"
+                    >
+                      <Plus size={11} /> إضافة تصنيف جديد
+                    </button>
+                  </div>
+                ) : (
+                  filtered.map((cat) => (
+                    <button
+                      key={cat.pnlKey}
+                      onClick={() => { onChange(cat.pnlKey); setOpen(false); setQuery(""); }}
+                      className={`w-full text-right px-3 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between gap-2 ${
+                        cat.pnlKey === value ? "bg-primary/10 text-primary font-medium" : ""
+                      }`}
+                    >
+                      <span className="truncate">{cat.nameAr}</span>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono opacity-60">
+                        {cat.pnlKey}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -249,6 +401,7 @@ function PnLKeySelect({
 export function ExcelUpload() {
   const [companies,    setCompanies]    = useState<Company[]>([]);
   const [leafCats,     setLeafCats]     = useState<LeafCategory[]>([]);
+  const [allCats,      setAllCats]      = useState<ApiCategory[]>([]);
   const [nameMap,      setNameMap]      = useState<Record<string, string>>({});
   const [dbMappings,   setDbMappings]   = useState<Record<string, string>>({});
   const [userMappings, setUserMappings] = useState<Record<string, string>>({}); // accountKey → pnlKey
@@ -268,7 +421,9 @@ export function ExcelUpload() {
     fetch("/api/categories")
       .then((r) => r.json())
       .then((d) => {
-        const leaves = extractLeaves(d.categories ?? []);
+        const cats   = d.categories ?? [];
+        const leaves = extractLeaves(cats);
+        setAllCats(cats);
         setLeafCats(leaves);
         setNameMap(buildNameMap(leaves));
       });
@@ -435,6 +590,17 @@ export function ExcelUpload() {
       if (match) autoMap[g.companyName] = match.id;
     }
     setCompanyMap(autoMap);
+  }
+
+  function handleCategoryCreated(cat: LeafCategory) {
+    setLeafCats((prev) => [...prev, cat]);
+    setAllCats((prev) => [...prev, { id: cat.id, nameAr: cat.nameAr, name: cat.name, pnlKey: cat.pnlKey, type: cat.type, children: [] }]);
+    setNameMap((prev) => ({
+      ...prev,
+      [cat.nameAr.toLowerCase().trim()]: cat.pnlKey,
+      [cat.name.toLowerCase().trim()]:   cat.pnlKey,
+      [cat.pnlKey.toLowerCase().trim()]: cat.pnlKey,
+    }));
   }
 
   const handleDrop = useCallback(
@@ -759,6 +925,8 @@ export function ExcelUpload() {
                             <PnLKeySelect
                               value={currentKey}
                               categories={leafCats}
+                              allCategories={allCats}
+                              onCategoryCreated={handleCategoryCreated}
                               onChange={(val) =>
                                 setUserMappings((prev) => {
                                   const next = { ...prev };
