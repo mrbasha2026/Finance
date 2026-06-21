@@ -41,7 +41,7 @@ export default function TwoFactorSetupPage() {
       toast.error(d.error ?? "رمز غير صحيح");
       return;
     }
-    await update();
+    await update({ twoFactorEnabled: true });
     router.push("/2fa-verify");
   }
 
