@@ -83,6 +83,22 @@ const COL_KEYS: Record<string, string> = {
 
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+// xlsx floating-point issue: dates like Jan 1 get stored as 45657.9994 (23:59:xx on Dec 31)
+// instead of 45658.0. Detect 23:59:xx and snap to next day.
+function xlsxDateToStr(d: Date): string {
+  let year = d.getFullYear();
+  let month = d.getMonth();
+  let day = d.getDate();
+  if (d.getHours() === 23 && d.getMinutes() === 59) {
+    const next = new Date(year, month, day + 1);
+    year = next.getFullYear();
+    month = next.getMonth();
+    day = next.getDate();
+  }
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 function extractLeaves(cats: ApiCategory[]): LeafCategory[] {
   return cats
     .filter((c) => (c.children?.length ?? 0) === 0 && c.pnlKey)
@@ -409,8 +425,9 @@ export function ExcelUpload() {
   const [groups,       setGroups]       = useState<CompanyGroup[]>([]);
   const [companyMap,   setCompanyMap]   = useState<Record<string, string>>({});
   const [selected,     setSelected]     = useState<Set<string>>(new Set());
-  const [saving,       setSaving]       = useState(false);
-  const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
+  const [saving,        setSaving]        = useState(false);
+  const [saveProgress,  setSaveProgress]  = useState("");
+  const [existingKeys,  setExistingKeys]  = useState<Set<string>>(new Set());
   const [mode,         setMode]         = useState<"merge" | "replace">("replace");
 
   useEffect(() => {
@@ -489,19 +506,18 @@ export function ExcelUpload() {
 
           if (!cell.accountKey && !cell.debit && !cell.credit) continue;
 
-          // Normalize date
           let dateStr = "";
           if (cell.date instanceof Date) {
-            dateStr = (cell.date as Date).toISOString().split("T")[0];
+            dateStr = xlsxDateToStr(cell.date as Date);
           } else if (cell.date) {
             const d = new Date(String(cell.date).trim());
-            if (!isNaN(d.getTime())) dateStr = d.toISOString().split("T")[0];
+            if (!isNaN(d.getTime())) dateStr = xlsxDateToStr(d);
             else dateStr = String(cell.date).trim();
           }
 
           // Derive period from date (YYYY-MM)
           if (!dateStr) continue;
-          const dateObj = new Date(dateStr);
+          const dateObj = new Date(`${dateStr}T00:00:00`);
           if (isNaN(dateObj.getTime())) continue;
           const period = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
 
@@ -721,32 +737,53 @@ export function ExcelUpload() {
 
     if (!datasets.length) { toast.error("لا توجد بيانات قابلة للحفظ — تحقق من ربط الحسابات"); return; }
 
-    const MAX_JOURNAL = 5000;
-    const cappedJournalEntries = journalEntries.slice(0, MAX_JOURNAL);
-    const journalTruncated = journalEntries.length > MAX_JOURNAL;
-
     setSaving(true);
+
+    // Step 1: save datasets
+    setSaveProgress("جارٍ حفظ بيانات P&L...");
     const res = await fetch("/api/pnl/save-batch", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ datasets, journalEntries: cappedJournalEntries }),
+      body:    JSON.stringify({ datasets }),
     });
-    setSaving(false);
 
-    if (res.ok) {
-      const { saved } = await res.json();
-      toast.success(`تم حفظ ${saved} فترة بنجاح`);
-      if (journalTruncated) {
-        toast.warning(`تم حفظ أول ${MAX_JOURNAL.toLocaleString()} قيد فقط من أصل ${journalEntries.length.toLocaleString()} — الملف كبير جداً`);
-      }
-      setGroups([]);
-      setSelected(new Set());
-      setCompanyMap({});
-      setUserMappings({});
-    } else {
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       toast.error(err.error || "حدث خطأ أثناء الحفظ");
+      setSaving(false);
+      setSaveProgress("");
+      return;
     }
+
+    const { saved } = await res.json();
+    toast.success(`تم حفظ ${saved} فترة بنجاح`);
+
+    // Step 2: save journal entries in batches of 2000
+    if (journalEntries.length > 0) {
+      const BATCH = 2000;
+      let journalSaved = 0;
+      for (let i = 0; i < journalEntries.length; i += BATCH) {
+        const batch = journalEntries.slice(i, i + BATCH);
+        setSaveProgress(`جارٍ حفظ القيود... ${Math.min(i + BATCH, journalEntries.length).toLocaleString()} / ${journalEntries.length.toLocaleString()}`);
+        const batchRes = await fetch("/api/journal-entries", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ entries: batch }),
+        });
+        if (batchRes.ok) {
+          const data = await batchRes.json();
+          journalSaved += data.saved ?? 0;
+        }
+      }
+      toast.success(`تم حفظ ${journalSaved.toLocaleString()} قيد`);
+    }
+
+    setSaving(false);
+    setSaveProgress("");
+    setGroups([]);
+    setSelected(new Set());
+    setCompanyMap({});
+    setUserMappings({});
   }
 
   function isPeriodExisting(companyName: string, period: string): boolean {
@@ -984,14 +1021,19 @@ export function ExcelUpload() {
             ) : (
               <span />
             )}
-            <button
-              onClick={handleSave}
-              disabled={saving || totalSelected === 0}
-              className="flex items-center gap-2 bg-primary text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              <Check size={15} />
-              {saving ? "جارٍ الحفظ..." : `حفظ ${totalSelected} فترة`}
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              {saveProgress && (
+                <p className="text-xs text-muted-foreground">{saveProgress}</p>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={saving || totalSelected === 0}
+                className="flex items-center gap-2 bg-primary text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                <Check size={15} />
+                {saving ? "جارٍ الحفظ..." : `حفظ ${totalSelected} فترة`}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -21,23 +21,9 @@ const datasetSchema = z.object({
   mode: z.enum(["merge", "replace"]).default("replace"),
 });
 
-const journalEntrySchema = z.object({
-  companyName: z.string(),
-  period: z.string(),
-  date: z.string(),
-  entryNumber: z.string(),
-  accountKey: z.string(),
-  accountNameAr: z.string(),
-  description: z.string().optional(),
-  debit: z.number(),
-  credit: z.number(),
-  reference: z.string().optional(),
-  currency: z.string(),
-});
 
 const bodySchema = z.object({
   datasets: z.array(datasetSchema).min(1),
-  journalEntries: z.array(journalEntrySchema).optional(),
 });
 
 export async function GET() {
@@ -77,7 +63,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { datasets, journalEntries } = parsed.data;
+    const { datasets } = parsed.data;
     const results = [];
 
     const namesNeeded = datasets.filter((d) => !d.companyId).map((d) => d.companyName);
@@ -152,21 +138,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const MAX_JOURNAL_ENTRIES = 5000;
-    let journalSkipped = 0;
-    if (journalEntries?.length) {
-      const capped = journalEntries.slice(0, MAX_JOURNAL_ENTRIES);
-      journalSkipped = journalEntries.length - capped.length;
-      const BATCH = 500;
-      const rows = capped.map((je) => ({ ...je, date: new Date(je.date) }));
-      for (let i = 0; i < rows.length; i += BATCH) {
-        await prisma.journalEntry.createMany({
-          data: rows.slice(i, i + BATCH),
-          skipDuplicates: true,
-        });
-      }
-    }
-
     await logAudit({
       userId: session.user.id,
       userEmail: session.user.email,
@@ -175,7 +146,7 @@ export async function POST(req: NextRequest) {
       details: { count: results.length },
     });
 
-    return NextResponse.json({ saved: results.length, journalSkipped });
+    return NextResponse.json({ saved: results.length });
   } catch (error) {
     console.error("[POST /api/pnl/save-batch]", error);
     const msg = error instanceof Error ? error.message : String(error);

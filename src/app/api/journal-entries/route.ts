@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const entrySchema = z.object({
+  companyName: z.string(),
+  period: z.string(),
+  date: z.string(),
+  entryNumber: z.string(),
+  accountKey: z.string(),
+  accountNameAr: z.string(),
+  description: z.string().optional(),
+  debit: z.number(),
+  credit: z.number(),
+  reference: z.string().optional(),
+  currency: z.string(),
+});
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,6 +60,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ entries });
   } catch (error) {
     console.error("[GET /api/journal-entries]", error);
+    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session.user.permissions?.includes("pnl.upload")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const parsed = z.object({ entries: z.array(entrySchema).min(1) }).safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "بيانات غير صحيحة" }, { status: 400 });
+    }
+
+    const result = await prisma.journalEntry.createMany({
+      data: parsed.data.entries.map((e) => ({ ...e, date: new Date(e.date) })),
+      skipDuplicates: true,
+    });
+
+    return NextResponse.json({ saved: result.count });
+  } catch (error) {
+    console.error("[POST /api/journal-entries]", error);
     return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
