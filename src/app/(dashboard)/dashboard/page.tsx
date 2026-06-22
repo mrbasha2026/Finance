@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessibleCompanyIds } from "@/lib/company-access";
+import type { Currency } from "@/lib/pnl-types";
 import dynamic from "next/dynamic";
 
 const DashboardClient = dynamic(
@@ -39,7 +40,7 @@ export default async function DashboardPage() {
           companyName: d.companyName,
           companyColor: d.company.color,
           period: d.period,
-          currency: d.currency,
+          currency: d.currency as Currency,
           netIncome: find("net_income"),
           revenue: find("revenue"),
         };

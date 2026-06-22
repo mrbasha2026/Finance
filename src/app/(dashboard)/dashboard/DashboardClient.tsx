@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { formatCurrency } from "@/lib/format";
+import type { Currency } from "@/lib/pnl-types";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -18,7 +19,7 @@ interface DashboardDataset {
   period: string;
   netIncome: number;
   revenue: number;
-  currency: string;
+  currency: Currency;
 }
 
 interface Props {
@@ -454,7 +455,6 @@ export function DashboardClient({ userName, companiesCount, datasetsCount, datas
                 current={totalRevenue}
                 previous={prevRevenue}
                 currency={currency}
-                currentPeriod={latestPeriod!.slice(0, 7)}
                 prevPeriodLabel={prevPeriod.slice(0, 7)}
               />
               <CompareCard
@@ -462,7 +462,6 @@ export function DashboardClient({ userName, companiesCount, datasetsCount, datas
                 current={totalNetIncome}
                 previous={prevNetIncome}
                 currency={currency}
-                currentPeriod={latestPeriod!.slice(0, 7)}
                 prevPeriodLabel={prevPeriod.slice(0, 7)}
               />
               <CompareCard
@@ -470,7 +469,6 @@ export function DashboardClient({ userName, companiesCount, datasetsCount, datas
                 current={netMargin}
                 previous={prevRevenue > 0 ? (prevNetIncome / prevRevenue) * 100 : 0}
                 isPercent
-                currentPeriod={latestPeriod!.slice(0, 7)}
                 prevPeriodLabel={prevPeriod.slice(0, 7)}
               />
               <div className="rounded-2xl border bg-card p-4 flex flex-col justify-between">
@@ -573,14 +571,13 @@ function MarginBar({ value, bold }: { value: number; bold?: boolean }) {
 }
 
 function CompareCard({
-  label, current, previous, currency, isPercent, currentPeriod, prevPeriodLabel,
+  label, current, previous, currency, isPercent, prevPeriodLabel,
 }: {
   label: string;
   current: number;
   previous: number;
-  currency?: string;
+  currency?: Currency;
   isPercent?: boolean;
-  currentPeriod: string;
   prevPeriodLabel: string;
 }) {
   const change = previous !== 0 ? ((current - previous) / Math.abs(previous)) * 100 : null;
