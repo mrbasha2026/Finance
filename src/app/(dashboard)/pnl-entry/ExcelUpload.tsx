@@ -413,6 +413,25 @@ function PnLKeySelect({
   );
 }
 
+// ── Save progress modal ────────────────────────────────────────────────────────
+function SaveProgressModal({ message }: { message: string }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-card border rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-5 min-w-[320px] max-w-sm">
+        <Loader2 size={36} className="animate-spin text-primary" />
+        <div className="text-center space-y-1.5">
+          <p className="font-semibold text-base">جارٍ الحفظ...</p>
+          <p className="text-sm text-muted-foreground">{message}</p>
+        </div>
+        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className="h-full w-1/2 bg-primary rounded-full animate-progress" />
+        </div>
+        <p className="text-xs text-muted-foreground/70">يرجى الانتظار حتى اكتمال العملية</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export function ExcelUpload() {
   const [companies,    setCompanies]    = useState<Company[]>([]);
@@ -807,6 +826,7 @@ export function ExcelUpload() {
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
+      {saving && <SaveProgressModal message={saveProgress} />}
       {/* Drop zone */}
       {!groups.length && (
         <div
@@ -1022,9 +1042,6 @@ export function ExcelUpload() {
               <span />
             )}
             <div className="flex flex-col items-end gap-1">
-              {saveProgress && (
-                <p className="text-xs text-muted-foreground">{saveProgress}</p>
-              )}
               <button
                 onClick={handleSave}
                 disabled={saving || totalSelected === 0}

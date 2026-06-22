@@ -33,6 +33,7 @@ declare module "next-auth/jwt" {
     twoFactorEnabled: boolean;
     twoFactorForced: boolean;
     twoFactorVerified?: boolean;
+    permissionsRefreshedAt?: number;
   }
 }
 
@@ -97,10 +98,33 @@ export const authOptions: NextAuthOptions = {
         token.twoFactorEnabled = user.twoFactorEnabled;
         token.twoFactorForced = user.twoFactorForced;
         token.twoFactorVerified = false;
+        token.permissionsRefreshedAt = Date.now();
       }
       // When client calls update({ twoFactorEnabled: true }), update the token
       if (session?.twoFactorEnabled !== undefined) {
         token.twoFactorEnabled = Boolean(session.twoFactorEnabled);
+      }
+      // Re-fetch permissions from DB every 60 seconds so role changes take effect without re-login
+      const age = Date.now() - ((token.permissionsRefreshedAt as number) ?? 0);
+      if (token.id && age > 60_000) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            include: { userRoles: { include: { role: true } } },
+          });
+          if (dbUser) {
+            token.roles = dbUser.userRoles.map((ur) => ur.role.name);
+            token.permissions = [
+              ...new Set(dbUser.userRoles.flatMap((ur) => ur.role.permissions as string[])),
+            ];
+            token.twoFactorEnabled = dbUser.twoFactorEnabled;
+          }
+          const settings = await prisma.systemSettings.findUnique({ where: { id: "singleton" } });
+          token.twoFactorForced = settings?.force2FA ?? false;
+        } catch {
+          // keep existing token values on DB error
+        }
+        token.permissionsRefreshedAt = Date.now();
       }
       return token;
     },

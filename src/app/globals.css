@@ -45,6 +45,14 @@
   --radius: 0.75rem;
 }
 
+@keyframes progress-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.animate-progress {
+  animation: progress-slide 1.4s ease-in-out infinite;
+}
+
 @layer base {
   :root {
     /* ── Brand tokens ── */
