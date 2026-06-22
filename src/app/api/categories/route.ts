@@ -27,7 +27,12 @@ export async function GET() {
 
     const categories = await prisma.category.findMany({
       orderBy: { sortOrder: "asc" },
-      include: { children: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        children: {
+          orderBy: { sortOrder: "asc" },
+          include: { children: { orderBy: { sortOrder: "asc" } } },
+        },
+      },
     });
 
     return NextResponse.json({ categories });

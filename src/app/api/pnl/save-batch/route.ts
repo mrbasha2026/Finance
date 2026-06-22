@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
-import { inferCalculatedRows } from "@/lib/pnl-calculations";
+import { inferDynamic } from "@/lib/pnl-calculations";
+import { DynamicCategory } from "@/lib/category-types";
 import { getAccessibleCompanyIds } from "@/lib/company-access";
 import { z } from "zod";
 
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest) {
     const { datasets } = parsed.data;
     const results = [];
 
+    // Fetch category tree once for dynamic P&L calculation
+    const rawCats = await prisma.category.findMany({ orderBy: { sortOrder: "asc" } });
+    const dynamicCats: DynamicCategory[] = rawCats.map((c) => ({ ...c, children: [] }));
+
     const namesNeeded = datasets.filter((d) => !d.companyId).map((d) => d.companyName);
     const existingCompanies = namesNeeded.length
       ? await prisma.company.findMany({ where: { name: { in: namesNeeded } } })
@@ -94,8 +99,6 @@ export async function POST(req: NextRequest) {
       for (const item of ds.lineItems) {
         rawData[item.key] = item.amount;
       }
-      const fullData = inferCalculatedRows(rawData);
-      let lineItems = Object.entries(fullData).map(([key, amount]) => ({ key, amount }));
 
       if (ds.mode === "merge") {
         const existing = await prisma.pnLDataset.findUnique({
@@ -104,11 +107,16 @@ export async function POST(req: NextRequest) {
         });
         if (existing) {
           const existingItems = (existing.parsed as { lineItems: { key: string; amount: number }[] })?.lineItems ?? [];
-          const merged = new Map(existingItems.map(({ key, amount }) => [key, amount]));
-          for (const { key, amount } of lineItems) merged.set(key, amount);
-          lineItems = Array.from(merged.entries()).map(([key, amount]) => ({ key, amount }));
+          // Sum amounts for matching keys (true merge = add, not replace)
+          for (const { key, amount } of existingItems) {
+            if (!(key in rawData)) rawData[key] = 0;
+            rawData[key] += amount;
+          }
         }
       }
+
+      const fullData = inferDynamic(rawData, dynamicCats);
+      let lineItems = Object.entries(fullData).map(([key, amount]) => ({ key, amount }));
 
       const saved = await prisma.pnLDataset.upsert({
         where: { companyId_period: { companyId, period: ds.period } },

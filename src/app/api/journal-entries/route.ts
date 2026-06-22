@@ -73,14 +73,24 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const parsed = z.object({ entries: z.array(entrySchema).min(1) }).safeParse(body);
+    const bodySchema = z.object({
+      entries: z.array(entrySchema).min(1),
+      clearPeriods: z.array(z.object({ companyName: z.string(), period: z.string() })).optional(),
+    });
+    const parsed = bodySchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "بيانات غير صحيحة" }, { status: 400 });
     }
 
+    // Delete existing entries for the specified periods before inserting (prevents duplicates on re-upload)
+    if (parsed.data.clearPeriods?.length) {
+      for (const { companyName, period } of parsed.data.clearPeriods) {
+        await prisma.journalEntry.deleteMany({ where: { companyName, period } });
+      }
+    }
+
     const result = await prisma.journalEntry.createMany({
       data: parsed.data.entries.map((e) => ({ ...e, date: new Date(e.date) })),
-      skipDuplicates: true,
     });
 
     return NextResponse.json({ saved: result.count });

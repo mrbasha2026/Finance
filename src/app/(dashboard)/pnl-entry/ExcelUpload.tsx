@@ -100,9 +100,15 @@ function xlsxDateToStr(d: Date): string {
 }
 
 function extractLeaves(cats: ApiCategory[]): LeafCategory[] {
-  return cats
-    .filter((c) => (c.children?.length ?? 0) === 0 && c.pnlKey)
-    .map((c) => ({ id: c.id, nameAr: c.nameAr, name: c.name, pnlKey: c.pnlKey!, type: c.type }));
+  const leaves: LeafCategory[] = [];
+  for (const c of cats) {
+    if (c.children?.length) {
+      leaves.push(...extractLeaves(c.children));
+    } else if (c.pnlKey) {
+      leaves.push({ id: c.id, nameAr: c.nameAr, name: c.name, pnlKey: c.pnlKey, type: c.type });
+    }
+  }
+  return leaves;
 }
 
 function buildNameMap(leaves: LeafCategory[]): Record<string, string> {
@@ -705,6 +711,8 @@ export function ExcelUpload() {
 
     const datasets:       SaveDataset[]   = [];
     const journalEntries: ParsedEntry[]   = [];
+    // Periods to clear before inserting journal entries (prevents duplicates on re-upload)
+    const clearPeriods: { companyName: string; period: string }[] = [];
 
     for (const group of groups) {
       const companyId = companyMap[group.companyName] ?? "";
@@ -713,13 +721,14 @@ export function ExcelUpload() {
         if (!selected.has(`${group.companyName}::${ps.period}`)) continue;
 
         const periodEntries = group.allEntries.filter((e) => e.period === ps.period);
-        const resolvedEntries = periodEntries.map((entry) => {
-          const resolvedKey =
-            resolveAccount(entry.accountKey, entry.accountNameAr, nameMap, effectiveDbMappings) ??
-            userMappings[entry.accountKey];
-          return resolvedKey ? { ...entry, accountKey: resolvedKey } : entry;
-        });
-        journalEntries.push(...resolvedEntries);
+        const actualMode = isPeriodExisting(group.companyName, ps.period) ? mode : "replace";
+
+        // Store original account codes in journal entries (do not replace with pnlKey)
+        journalEntries.push(...periodEntries);
+        // Only clear existing journal entries in replace mode; merge keeps old entries
+        if (actualMode === "replace") {
+          clearPeriods.push({ companyName: group.companyName, period: ps.period });
+        }
 
         // Aggregate by accountKey → pnlKey with sign-aware amounts
         const pnlAmounts: Record<string, number> = {};
@@ -749,7 +758,7 @@ export function ExcelUpload() {
           period:      ps.period,
           currency:    group.currency,
           lineItems,
-          mode: isPeriodExisting(group.companyName, ps.period) ? mode : "replace",
+          mode: actualMode,
         });
       }
     }
@@ -784,10 +793,13 @@ export function ExcelUpload() {
       for (let i = 0; i < journalEntries.length; i += BATCH) {
         const batch = journalEntries.slice(i, i + BATCH);
         setSaveProgress(`جارٍ حفظ القيود... ${Math.min(i + BATCH, journalEntries.length).toLocaleString()} / ${journalEntries.length.toLocaleString()}`);
+        // Send clearPeriods only on the first batch to delete old entries before re-inserting
+        const body: Record<string, unknown> = { entries: batch };
+        if (i === 0) body.clearPeriods = clearPeriods;
         const batchRes = await fetch("/api/journal-entries", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ entries: batch }),
+          body:    JSON.stringify(body),
         });
         if (batchRes.ok) {
           const data = await batchRes.json();

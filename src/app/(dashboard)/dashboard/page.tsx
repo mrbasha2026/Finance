@@ -18,13 +18,13 @@ export default async function DashboardPage() {
 
   const datasetFilter = accessibleIds !== null ? { companyId: { in: accessibleIds } } : undefined;
 
-  const [companiesCount, datasetsCount, topDatasets] = await Promise.all([
+  const [companiesCount, datasetsCount, allDatasets] = await Promise.all([
     prisma.company.count({ where: accessibleIds !== null ? { id: { in: accessibleIds } } : undefined }),
     prisma.pnLDataset.count({ where: datasetFilter }),
     prisma.pnLDataset.findMany({
       where: datasetFilter,
       orderBy: { period: "asc" },
-      include: { company: { select: { color: true, currency: true } } },
+      include: { company: { select: { color: true } } },
     }),
   ]);
 
@@ -33,16 +33,18 @@ export default async function DashboardPage() {
       userName={session?.user.name ?? ""}
       companiesCount={companiesCount}
       datasetsCount={datasetsCount}
-      datasets={topDatasets.map((d) => {
+      datasets={allDatasets.map((d) => {
         const parsed = d.parsed as { lineItems: { key: string; amount: number }[] };
         const find = (key: string) => parsed.lineItems.find((li) => li.key === key)?.amount ?? 0;
         return {
-          companyName: d.companyName,
-          companyColor: d.company.color,
-          period: d.period,
-          currency: d.currency as Currency,
-          netIncome: find("net_income"),
-          revenue: find("revenue"),
+          companyName:     d.companyName,
+          companyColor:    d.company.color,
+          period:          d.period,
+          currency:        d.currency as Currency,
+          revenue:         find("revenue"),
+          grossProfit:     find("gross_profit"),
+          operatingIncome: find("operating_income"),
+          netIncome:       find("net_income"),
         };
       })}
     />
