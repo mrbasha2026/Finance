@@ -4,24 +4,16 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Upload, FileSpreadsheet, Check, Link2, Search, ChevronDown, X, Download, Plus, Loader2 } from "lucide-react";
 import { Company } from "@/lib/pnl-types";
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-interface LeafCategory {
-  id:     string;
-  nameAr: string;
-  name:   string;
-  pnlKey: string;
-  type:   string;
-}
-
-interface ApiCategory {
-  id:       string;
-  nameAr:   string;
-  name:     string;
-  pnlKey:   string | null;
-  type:     string;
-  children: ApiCategory[];
-}
+import {
+  type LeafCategory,
+  type ApiCategory,
+  xlsxDateToStr,
+  normalizeAr,
+  extractLeaves,
+  buildNameMap,
+  resolveAccount,
+  COL_KEYS,
+} from "./ExcelUpload.utils";
 
 interface ParsedEntry {
   companyName:  string;
@@ -62,79 +54,6 @@ interface SaveDataset {
   currency:    string;
   lineItems:   { key: string; amount: number }[];
   mode:        "merge" | "replace";
-}
-
-// ── Column name map ────────────────────────────────────────────────────────────
-const COL_KEYS: Record<string, string> = {
-  "اسم الشركة": "companyName", "الشركة": "companyName",
-  "company": "companyName", "companyname": "companyName",
-  "التاريخ": "date", "date": "date",
-  "رقم القيد": "entryNumber", "entrynumber": "entryNumber",
-  "كود الحساب": "accountKey", "كود": "accountKey",
-  "accountkey": "accountKey", "account": "accountKey",
-  "اسم الحساب": "accountNameAr",
-  "accountname": "accountNameAr", "accountnamear": "accountNameAr",
-  "الوصف": "description", "description": "description",
-  "مدين": "debit", "debit": "debit",
-  "دائن": "credit", "credit": "credit",
-  "المرجع": "reference", "reference": "reference",
-  "العملة": "currency", "currency": "currency",
-};
-
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-// xlsx floating-point issue: dates like Jan 1 get stored as 45657.9994 (23:59:xx on Dec 31)
-// instead of 45658.0. Detect 23:59:xx and snap to next day.
-function xlsxDateToStr(d: Date): string {
-  let year = d.getFullYear();
-  let month = d.getMonth();
-  let day = d.getDate();
-  if (d.getHours() === 23 && d.getMinutes() === 59) {
-    const next = new Date(year, month, day + 1);
-    year = next.getFullYear();
-    month = next.getMonth();
-    day = next.getDate();
-  }
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function extractLeaves(cats: ApiCategory[]): LeafCategory[] {
-  const leaves: LeafCategory[] = [];
-  for (const c of cats) {
-    if (c.children?.length) {
-      leaves.push(...extractLeaves(c.children));
-    } else if (c.pnlKey) {
-      leaves.push({ id: c.id, nameAr: c.nameAr, name: c.name, pnlKey: c.pnlKey, type: c.type });
-    }
-  }
-  return leaves;
-}
-
-function buildNameMap(leaves: LeafCategory[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const cat of leaves) {
-    map[cat.nameAr.toLowerCase().trim()] = cat.pnlKey;
-    map[cat.name.toLowerCase().trim()]   = cat.pnlKey;
-    map[cat.pnlKey.toLowerCase().trim()] = cat.pnlKey;
-  }
-  return map;
-}
-
-function resolveAccount(
-  accountKey:   string,
-  accountNameAr: string,
-  nameMap:      Record<string, string>,
-  dbMappings:   Record<string, string>,
-): string | null {
-  const keyLow  = accountKey?.trim().toLowerCase();
-  const nameLow = accountNameAr?.trim().toLowerCase();
-
-  if (keyLow  && nameMap[keyLow])  return nameMap[keyLow];
-  if (nameLow && nameMap[nameLow]) return nameMap[nameLow];
-  if (accountKey  && dbMappings[accountKey.trim()])  return dbMappings[accountKey.trim()];
-  if (accountNameAr && dbMappings[accountNameAr.trim()]) return dbMappings[accountNameAr.trim()];
-  return null;
 }
 
 // ── Inline add-category form state ────────────────────────────────────────────
@@ -635,12 +554,12 @@ export function ExcelUpload() {
 
   function handleCategoryCreated(cat: LeafCategory) {
     setLeafCats((prev) => [...prev, cat]);
-    setAllCats((prev) => [...prev, { id: cat.id, nameAr: cat.nameAr, name: cat.name, pnlKey: cat.pnlKey, type: cat.type, children: [] }]);
+    setAllCats((prev) => [...prev, { id: cat.id, nameAr: cat.nameAr, name: cat.name, pnlKey: cat.pnlKey, type: cat.type, isCalculated: false, children: [] }]);
     setNameMap((prev) => ({
       ...prev,
-      [cat.nameAr.toLowerCase().trim()]: cat.pnlKey,
+      [normalizeAr(cat.nameAr)]:         cat.pnlKey,
       [cat.name.toLowerCase().trim()]:   cat.pnlKey,
-      [cat.pnlKey.toLowerCase().trim()]: cat.pnlKey,
+      [cat.pnlKey.toLowerCase()]:        cat.pnlKey,
     }));
   }
 
