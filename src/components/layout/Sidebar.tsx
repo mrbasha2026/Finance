@@ -38,7 +38,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/pnl-reports",    icon: FileBarChart2, label: "تقارير شركة",        permission: "pnl.view" },
       { href: "/pnl-entry",      icon: PenLine,       label: "إدخال البيانات",     permission: "pnl.upload" },
-      { href: "/shared-reports", icon: FileText,      label: "تقارير مشتركة",      permission: "pnl.view" },
+      { href: "/shared-reports", icon: FileText,      label: "تقارير مشتركة",      permission: "pnl.shared_view" },
       { href: "/prepaid",        icon: Receipt,       label: "المصروفات المقدمة",  permission: "prepaid.view" },
       { href: "/ai-analysis",    icon: Sparkles,      label: "تحليل ذكي",           permission: "forecasts.view" },
       { href: "/forecasts",      icon: TrendingUp,    label: "التوقعات المالية",   permission: "forecasts.view" },

@@ -2,6 +2,7 @@ export const PERMISSIONS = {
   PNL_VIEW: "pnl.view",
   PNL_UPLOAD: "pnl.upload",
   PNL_ANALYZE: "pnl.analyze",
+  PNL_SHARED_VIEW: "pnl.shared_view",
   COMPANIES_VIEW: "companies.view",
   COMPANIES_MANAGE: "companies.manage",
   USERS_VIEW: "users.view",
@@ -21,9 +22,10 @@ export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 export const ALL_PERMISSIONS: Permission[] = Object.values(PERMISSIONS);
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
-  "pnl.view": "عرض الأرباح والخسائر",
+  "pnl.view": "عرض تقارير الشركة",
   "pnl.upload": "رفع بيانات P&L",
   "pnl.analyze": "تحليل P&L",
+  "pnl.shared_view": "عرض التقارير المشتركة (القابضة)",
   "companies.view": "عرض الشركات",
   "companies.manage": "إدارة الشركات",
   "users.view": "عرض المستخدمين",
