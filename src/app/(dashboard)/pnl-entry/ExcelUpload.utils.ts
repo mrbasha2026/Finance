@@ -74,9 +74,15 @@ export function resolveAccount(
 
   if (keyLow   && nameMap[keyLow])   return nameMap[keyLow];
   if (nameNorm && nameMap[nameNorm]) return nameMap[nameNorm];
-  if (accountKey    && dbMappings[accountKey.trim()])    return dbMappings[accountKey.trim()];
-  if (accountNameAr && dbMappings[accountNameAr.trim()]) return dbMappings[accountNameAr.trim()];
-  if (nameNorm && dbMappings[nameNorm]) return dbMappings[nameNorm];
+
+  // Validate dbMappings result against nameMap: only use if the key still corresponds
+  // to a current leaf category. Stale mappings pointing to parent/renamed keys are ignored.
+  const dbKey =
+    (accountKey    && dbMappings[accountKey.trim()])    ||
+    (accountNameAr && dbMappings[accountNameAr.trim()]) ||
+    (nameNorm      && dbMappings[nameNorm]);
+  if (dbKey && nameMap[dbKey.toLowerCase()]) return dbKey;
+
   return null;
 }
 

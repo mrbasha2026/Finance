@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { usePnLStore } from "@/store/pnl-store";
@@ -12,7 +12,7 @@ import { SkeletonKPIBar, SkeletonTable } from "@/components/shared/SkeletonLoade
 import dynamic from "next/dynamic";
 import type { HoldingChartType } from "./HoldingCharts";
 const HoldingCharts = dynamic(() => import("./HoldingCharts").then((m) => ({ default: m.HoldingCharts })), { ssr: false });
-import { Building2, ChevronDown, ChevronLeft, FileText, X } from "lucide-react";
+import { Building2, ChevronDown, ChevronLeft, FileText, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DynamicCategory, catKey, FORMULA_KEYS } from "@/lib/category-types";
 
@@ -26,19 +26,65 @@ type MultiReport =
   | "expense_comparison"
   | "margin_comparison"
   | "variance"
-  | "group_trend";
+  | "group_trend"
+  | "scorecard";
 
-const REPORT_TABS: { key: MultiReport; label: string; description: string }[] = [
-  { key: "consolidated",       label: "تقرير الأرباح والخسائر الموحد",           description: "جدول أرباح وخسائر موحد يجمع بيانات جميع الشركات المختارة" },
-  { key: "comparison",         label: "تقرير مقارنة الأرباح بين الشركات",       description: "مقارنة صافي ربح كل شركة في الفترة المختارة بمخطط أعمدة" },
-  { key: "profitability",      label: "تقرير ربحية الشركات",                    description: "منحنى ربحية الشركات عبر الفترات الزمنية المتعاقبة" },
-  { key: "ranking",            label: "تقرير ترتيب الشركات حسب الربح",          description: "ترتيب الشركات تنازلياً حسب صافي الربح في الفترة المختارة" },
-  { key: "contribution",       label: "تقرير مساهمة الشركات في أرباح المجموعة", description: "نسبة مساهمة كل شركة في إجمالي أرباح المجموعة بمخطط دائري" },
-  { key: "revenue_comparison", label: "تقرير مقارنة الإيرادات بين الشركات",     description: "مقارنة إيرادات الشركات جنباً إلى جنب عبر الفترات" },
-  { key: "expense_comparison", label: "تقرير مقارنة المصروفات بين الشركات",     description: "مقارنة مصروفات الشركات في صورة خريطة حرارية" },
-  { key: "margin_comparison",  label: "تقرير مقارنة هامش الربح بين الشركات",    description: "مقارنة هوامش الربح بين الشركات لقياس الكفاءة التشغيلية" },
-  { key: "variance",           label: "تقرير تغيرات الأرباح بين الفترات",       description: "تحليل التغيرات في أرباح كل شركة بين فترتين متتاليتين" },
-  { key: "group_trend",        label: "تقرير اتجاه أداء المجموعة",              description: "اتجاه نمو إيرادات وأرباح المجموعة على مدار جميع الفترات" },
+const REPORT_TABS: { key: MultiReport; label: string; purpose: string; benefit: string }[] = [
+  {
+    key: "consolidated", label: "تقرير الأرباح والخسائر الموحد",
+    purpose: "يجمع بيانات جميع الشركات المختارة في جدول أرباح وخسائر موحد واحد مع تفاصيل كل شركة على حدة.",
+    benefit: "يمنحك صورة مالية شاملة للمجموعة دفعةً واحدة ويتيح مقارنة الأداء بين الشركات التابعة في نفس الجدول.",
+  },
+  {
+    key: "comparison", label: "تقرير مقارنة الأرباح بين الشركات",
+    purpose: "يقارن الإيرادات وإجمالي الربح والدخل التشغيلي وصافي الدخل لكل شركة عبر الفترات المختارة.",
+    benefit: "يكشف الشركات الأعلى والأدنى أداءً ويساعد في توجيه الدعم والموارد نحو الأفرع التي تحتاج تحسيناً.",
+  },
+  {
+    key: "profitability", label: "تقرير ربحية الشركات",
+    purpose: "يعرض صافي الدخل وهامش الصافي وهامش إجمالي الربح لكل شركة عبر جميع الفترات الزمنية.",
+    benefit: "يقيس الكفاءة التشغيلية لكل شركة ويساعد في تحديد الأنماط المتكررة في تحسّن أو تراجع الربحية.",
+  },
+  {
+    key: "ranking", label: "تقرير ترتيب الشركات حسب الربح",
+    purpose: "يرتب جميع الشركات تنازلياً حسب صافي الربح في الفترة المختارة مع مؤشر بصري لحجم الربح.",
+    benefit: "يحدد الشركات الأكثر مساهمةً في أرباح المجموعة ويدعم قرارات توزيع الاستثمار والموارد.",
+  },
+  {
+    key: "contribution", label: "تقرير مساهمة الشركات في أرباح المجموعة",
+    purpose: "يوضح نسبة مساهمة كل شركة في إجمالي إيرادات المجموعة وأرباحها الصافية بمخطط دائري.",
+    benefit: "يظهر التركّز والتنويع في مصادر ربح المجموعة ويساعد في تقليل الاعتماد المفرط على شركة واحدة.",
+  },
+  {
+    key: "revenue_comparison", label: "تقرير مقارنة الإيرادات بين الشركات",
+    purpose: "يقارن إيرادات وإجمالي ربح كل شركة جنباً إلى جنب عبر الفترات الزمنية المختلفة.",
+    benefit: "يرصد نمو الإيرادات أو تراجعها لكل شركة ويساعد في تحديد الفرص التوسعية والأسواق الأكثر نشاطاً.",
+  },
+  {
+    key: "expense_comparison", label: "تقرير مقارنة المصروفات بين الشركات",
+    purpose: "يقارن بنود المصروفات الرئيسية (تكلفة المبيعات، البيع، الإدارة، الاستهلاك) لكل فترة.",
+    benefit: "يحدد الشركات ذات التكاليف المرتفعة غير المبررة ويدعم جهود ضبط الإنفاق على مستوى المجموعة.",
+  },
+  {
+    key: "margin_comparison", label: "تقرير مقارنة هامش الربح بين الشركات",
+    purpose: "يقارن هوامش الربح الإجمالي والتشغيلي و EBITDA والصافي بين جميع الشركات عبر الفترات.",
+    benefit: "يقيس الكفاءة النسبية لكل شركة في تحويل إيراداتها إلى ربح بصرف النظر عن حجمها.",
+  },
+  {
+    key: "variance", label: "تقرير تغيرات الأرباح بين الفترات",
+    purpose: "يحسب الانحراف المطلق والنسبي في الإيرادات والأرباح لكل شركة بين الفترات المتتالية.",
+    benefit: "يكشف الشركات التي شهدت تحولات كبيرة في الأداء ويساعد في تحديد أسباب التحسّن أو التراجع.",
+  },
+  {
+    key: "group_trend", label: "تقرير اتجاه أداء المجموعة",
+    purpose: "يتتبع الإيرادات وإجمالي الربح والدخل التشغيلي وصافي الدخل الموحد للمجموعة عبر جميع الفترات.",
+    benefit: "يوضح مسار نمو المجموعة ككل ويمكّن من التنبؤ بالأداء المستقبلي واتخاذ قرارات استراتيجية مبنية على بيانات.",
+  },
+  {
+    key: "scorecard", label: "بطاقة الأداء المقارن",
+    purpose: "يقيّم كل شركة عبر 6 مقاييس مالية (الإيرادات، صافي الدخل، هوامش الربح) ويمنح كل شركة نقاطاً بحسب مرتبتها في كل مقياس.",
+    benefit: "يحدد الشركة الأفضل أداءً إجمالاً بنظام نقاط موضوعي، ويكشف نقاط القوة والضعف لكل شركة في لمحة واحدة.",
+  },
 ];
 
 const REPORT_CHART: Partial<Record<MultiReport, HoldingChartType>> = {
@@ -160,14 +206,21 @@ export default function SharedReportsPage() {
     });
   }, [periodGroups, companies, selectedCompanyNames, availableCompanies, categories]);
 
-  const latestPeriod = allPeriodsData.at(-1);
-
   const displayedPeriodsData = useMemo(
     () => selectedPeriodKey
       ? allPeriodsData.filter((s) => s.group.key === selectedPeriodKey)
       : allPeriodsData,
     [allPeriodsData, selectedPeriodKey]
   );
+
+  const currentPeriodSnapshot = displayedPeriodsData.at(-1);
+
+  const prevDisplayedPeriod = useMemo(() => {
+    const currentIdx = selectedPeriodKey
+      ? allPeriodsData.findIndex((s) => s.group.key === selectedPeriodKey)
+      : allPeriodsData.length - 1;
+    return currentIdx > 0 ? allPeriodsData[currentIdx - 1] : null;
+  }, [allPeriodsData, selectedPeriodKey]);
 
   const toggleAllCompanies = () => {
     if (selectedCompanyNames.length === availableCompanies.length) {
@@ -286,33 +339,33 @@ export default function SharedReportsPage() {
         )}
       </div>
 
-      {/* ── بطاقات KPI — آخر فترة ── */}
-      {latestPeriod && (
+      {/* ── بطاقات KPI — الفترة المحددة أو الأخيرة ── */}
+      {currentPeriodSnapshot && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <KPICard title="الإيرادات الموحدة" value={formatCurrency(latestPeriod.consolidatedKpis.revenue, "SAR", true)} colorVariant="blue" />
+          <KPICard title="الإيرادات الموحدة" value={formatCurrency(currentPeriodSnapshot.consolidatedKpis.revenue, "SAR", true)} colorVariant="blue" />
           <KPICard
             title="إجمالي الربح"
-            value={formatCurrency(latestPeriod.consolidatedKpis.grossProfit, "SAR", true)}
-            subtitle={formatPercent(latestPeriod.consolidatedKpis.grossMargin)}
+            value={formatCurrency(currentPeriodSnapshot.consolidatedKpis.grossProfit, "SAR", true)}
+            subtitle={formatPercent(currentPeriodSnapshot.consolidatedKpis.grossMargin)}
             colorVariant="emerald"
           />
           <KPICard
             title="EBITDA"
-            value={formatCurrency(latestPeriod.consolidatedKpis.ebitda, "SAR", true)}
-            subtitle={formatPercent(latestPeriod.consolidatedKpis.ebitdaMargin)}
+            value={formatCurrency(currentPeriodSnapshot.consolidatedKpis.ebitda, "SAR", true)}
+            subtitle={formatPercent(currentPeriodSnapshot.consolidatedKpis.ebitdaMargin)}
             colorVariant="teal"
           />
           <KPICard
             title="الدخل التشغيلي"
-            value={formatCurrency(latestPeriod.consolidatedKpis.operatingIncome, "SAR", true)}
-            subtitle={formatPercent(latestPeriod.consolidatedKpis.operatingMargin)}
+            value={formatCurrency(currentPeriodSnapshot.consolidatedKpis.operatingIncome, "SAR", true)}
+            subtitle={formatPercent(currentPeriodSnapshot.consolidatedKpis.operatingMargin)}
             colorVariant="cyan"
           />
           <KPICard
             title="صافي الربح الموحد"
-            value={formatCurrency(latestPeriod.consolidatedKpis.netIncome, "SAR", true)}
-            subtitle={formatPercent(latestPeriod.consolidatedKpis.netMargin)}
-            colorVariant={latestPeriod.consolidatedKpis.netIncome >= 0 ? "emerald" : "amber"}
+            value={formatCurrency(currentPeriodSnapshot.consolidatedKpis.netIncome, "SAR", true)}
+            subtitle={formatPercent(currentPeriodSnapshot.consolidatedKpis.netMargin)}
+            colorVariant={currentPeriodSnapshot.consolidatedKpis.netIncome >= 0 ? "emerald" : "amber"}
           />
         </div>
       )}
@@ -337,13 +390,39 @@ export default function SharedReportsPage() {
 
       {/* ── وصف التقرير النشط ── */}
       {(() => {
-        const desc = REPORT_TABS.find(t => t.key === activeReport)?.description;
-        return desc ? (
-          <p className="text-xs text-muted-foreground px-1 -mt-2">{desc}</p>
+        const tab = REPORT_TABS.find(t => t.key === activeReport);
+        return tab ? (
+          <div className="flex gap-3 p-3.5 bg-primary/5 border border-primary/20 rounded-xl text-sm">
+            <Info size={16} className="text-primary shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-foreground">
+                <span className="font-semibold text-primary">ماذا يعمل: </span>
+                {tab.purpose}
+              </p>
+              <p className="text-muted-foreground">
+                <span className="font-semibold">الفائدة: </span>
+                {tab.benefit}
+              </p>
+            </div>
+          </div>
         ) : null;
       })()}
 
       <div className="fade-in space-y-4">
+        {REPORT_CHART[activeReport] && (
+          <HoldingCharts
+            periodDataByCompany={currentPeriodSnapshot?.byCompany ?? []}
+            prevPeriodDataByCompany={prevDisplayedPeriod?.byCompany ?? null}
+            consolidatedData={currentPeriodSnapshot?.consolidatedData ?? {}}
+            periodGroups={periodGroups}
+            allCompanyDatasets={filteredCompanies}
+            selectedCompanyNames={selectedCompanyNames}
+            categories={categories}
+            chartType={REPORT_CHART[activeReport]!}
+            currency="SAR"
+          />
+        )}
+
         {activeReport === "consolidated" && (
           <>
             <MultiCompanyPnLTable
@@ -366,26 +445,14 @@ export default function SharedReportsPage() {
         )}
         {activeReport === "comparison"         && <CompanyComparisonReport allPeriodsData={displayedPeriodsData} />}
         {activeReport === "profitability"       && <ProfitabilityReport     allPeriodsData={displayedPeriodsData} />}
-        {activeReport === "ranking"             && <RankingReport           periodDataByCompany={latestPeriod?.byCompany ?? []} />}
-        {activeReport === "contribution"        && <ContributionReport      periodDataByCompany={latestPeriod?.byCompany ?? []} />}
+        {activeReport === "ranking"             && <RankingReport           periodDataByCompany={currentPeriodSnapshot?.byCompany ?? []} />}
+        {activeReport === "contribution"        && <ContributionReport      periodDataByCompany={currentPeriodSnapshot?.byCompany ?? []} />}
         {activeReport === "revenue_comparison"  && <RevenueComparisonReport allPeriodsData={displayedPeriodsData} />}
-        {activeReport === "expense_comparison"  && <ExpenseComparisonReport allPeriodsData={displayedPeriodsData} />}
+        {activeReport === "expense_comparison"  && <ExpenseComparisonReport allPeriodsData={displayedPeriodsData} categories={categories} />}
         {activeReport === "margin_comparison"   && <MarginComparisonReport  allPeriodsData={displayedPeriodsData} />}
         {activeReport === "variance"            && <VarianceReport          allPeriodsData={displayedPeriodsData} />}
         {activeReport === "group_trend"         && <GroupTrendReport        allPeriodsData={displayedPeriodsData} />}
-
-        {REPORT_CHART[activeReport] && (
-          <HoldingCharts
-            periodDataByCompany={latestPeriod?.byCompany ?? []}
-            prevPeriodDataByCompany={null}
-            consolidatedData={latestPeriod?.consolidatedData ?? {}}
-            periodGroups={periodGroups}
-            allCompanyDatasets={filteredCompanies}
-            selectedCompanyNames={selectedCompanyNames}
-            chartType={REPORT_CHART[activeReport]!}
-            currency="SAR"
-          />
-        )}
+        {activeReport === "scorecard"           && <ScorecardReport         periodDataByCompany={currentPeriodSnapshot?.byCompany ?? []} prevPeriodDataByCompany={prevDisplayedPeriod?.byCompany ?? null} />}
       </div>
     </div>
   );
@@ -985,17 +1052,28 @@ function RevenueComparisonReport({ allPeriodsData }: { allPeriodsData: PeriodSna
   );
 }
 
-function ExpenseComparisonReport({ allPeriodsData }: { allPeriodsData: PeriodSnapshot[] }) {
+function ExpenseComparisonReport({
+  allPeriodsData,
+  categories,
+}: {
+  allPeriodsData: PeriodSnapshot[];
+  categories: DynamicCategory[];
+}) {
   if (allPeriodsData.length === 0) return <EmptyState />;
 
-  const expenseRows = [
-    { key: "cost_of_goods_sold",       label: "تكلفة البضاعة المباعة"     },
-    { key: "selling_expenses",          label: "مصروفات البيع"              },
-    { key: "general_admin_expenses",    label: "مصروفات الإدارة والعمومية"  },
-    { key: "depreciation_amortization", label: "الاستهلاك والإطفاء"         },
-    { key: "other_expenses",            label: "مصروفات أخرى"               },
-    { key: "zakat_expense",             label: "الزكاة"                      },
-  ];
+  const topExpenseCategories = categories.filter(
+    (c) => c.type === "expense" && !c.parentId && !FORMULA_KEYS.has(c.pnlKey ?? "")
+  );
+  const expenseRows = topExpenseCategories.length > 0
+    ? topExpenseCategories.map((c) => ({ key: catKey(c), label: c.nameAr }))
+    : [
+        { key: "cost_of_goods_sold",       label: "تكلفة البضاعة المباعة"    },
+        { key: "selling_expenses",          label: "مصروفات البيع"             },
+        { key: "general_admin_expenses",    label: "مصروفات الإدارة والعمومية" },
+        { key: "depreciation_amortization", label: "الاستهلاك والإطفاء"        },
+        { key: "other_expenses",            label: "مصروفات أخرى"              },
+        { key: "zakat_expense",             label: "الزكاة"                     },
+      ];
 
   return (
     <div className="rounded-xl border overflow-auto shadow-sm">
@@ -1209,6 +1287,220 @@ function GroupTrendReport({ allPeriodsData }: { allPeriodsData: PeriodSnapshot[]
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ─── بطاقة الأداء المقارن ─────────────────────────────────────────────────────
+
+function RankBadge({ rank, total }: { rank: number; total: number }) {
+  if (rank === 1) return (
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-white text-xs font-bold shadow-sm">
+      {rank}
+    </span>
+  );
+  if (rank === 2) return (
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-400 text-white text-xs font-bold shadow-sm">
+      {rank}
+    </span>
+  );
+  if (rank === 3) return (
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white text-xs font-bold shadow-sm">
+      {rank}
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-medium">
+      {rank}
+    </span>
+  );
+}
+
+function ScorecardReport({
+  periodDataByCompany,
+  prevPeriodDataByCompany,
+}: {
+  periodDataByCompany: CompanyPeriodData[];
+  prevPeriodDataByCompany: CompanyPeriodData[] | null;
+}) {
+  if (periodDataByCompany.length === 0) return <EmptyState />;
+
+  const n = periodDataByCompany.length;
+
+  type Metric = {
+    key: string;
+    label: string;
+    get: (c: CompanyPeriodData) => number;
+    fmt: (v: number) => string;
+    higherIsBetter: boolean;
+  };
+
+  const baseMetrics: Metric[] = [
+    { key: "revenue",      label: "الإيرادات",      get: (c) => c.kpis.revenue,      fmt: (v) => formatCurrency(v, "SAR", true), higherIsBetter: true },
+    { key: "grossProfit",  label: "إجمالي الربح",   get: (c) => c.kpis.grossProfit,  fmt: (v) => formatCurrency(v, "SAR", true), higherIsBetter: true },
+    { key: "netIncome",    label: "صافي الدخل",     get: (c) => c.kpis.netIncome,    fmt: (v) => formatCurrency(v, "SAR", true), higherIsBetter: true },
+    { key: "grossMargin",  label: "هامش إجمالي %",  get: (c) => c.kpis.grossMargin,  fmt: (v) => formatPercent(v),               higherIsBetter: true },
+    { key: "netMargin",    label: "هامش صافي %",    get: (c) => c.kpis.netMargin,    fmt: (v) => formatPercent(v),               higherIsBetter: true },
+    { key: "ebitdaMargin", label: "هامش EBITDA %",  get: (c) => c.kpis.ebitdaMargin, fmt: (v) => formatPercent(v),               higherIsBetter: true },
+  ];
+
+  const growthMetric: Metric | null =
+    prevPeriodDataByCompany && prevPeriodDataByCompany.length > 0
+      ? {
+          key: "revenueGrowth",
+          label: "نمو الإيرادات %",
+          get: (c) => {
+            const prev = prevPeriodDataByCompany.find((p) => p.name === c.name)?.kpis.revenue ?? 0;
+            return prev > 0 ? ((c.kpis.revenue - prev) / prev) * 100 : 0;
+          },
+          fmt: (v) => (v >= 0 ? "+" : "") + v.toFixed(1) + "%",
+          higherIsBetter: true,
+        }
+      : null;
+
+  const metrics: Metric[] = growthMetric ? [...baseMetrics, growthMetric] : baseMetrics;
+
+  const scores: Record<string, number> = {};
+  const ranks: Record<string, Record<string, number>> = {};
+  const vals: Record<string, Record<string, number>> = {};
+
+  periodDataByCompany.forEach((c) => {
+    scores[c.name] = 0;
+    ranks[c.name] = {};
+    vals[c.name] = {};
+  });
+
+  metrics.forEach((metric) => {
+    const sorted = [...periodDataByCompany].sort((a, b) =>
+      metric.higherIsBetter ? metric.get(b) - metric.get(a) : metric.get(a) - metric.get(b)
+    );
+    sorted.forEach((c, i) => {
+      ranks[c.name][metric.key] = i + 1;
+      vals[c.name][metric.key] = metric.get(c);
+      scores[c.name] += n - i;
+    });
+  });
+
+  const sortedByScore = [...periodDataByCompany].sort((a, b) => scores[b.name] - scores[a.name]);
+  const maxScore = scores[sortedByScore[0]?.name ?? ""] ?? 1;
+  const winner = sortedByScore[0];
+
+  const bestPerMetric = metrics.map((m) => {
+    const best = [...periodDataByCompany].sort((a, b) =>
+      m.higherIsBetter ? m.get(b) - m.get(a) : m.get(a) - m.get(b)
+    )[0];
+    return { metric: m, company: best };
+  });
+
+  return (
+    <div className="space-y-4">
+      {winner && (
+        <div
+          className="flex items-center gap-4 p-4 rounded-xl border-2 shadow-sm"
+          style={{ borderColor: winner.color, backgroundColor: winner.color + "10" }}
+        >
+          <span
+            className="inline-flex items-center justify-center w-10 h-10 rounded-full text-white text-lg font-bold shadow"
+            style={{ backgroundColor: winner.color }}
+          >
+            1
+          </span>
+          <div>
+            <p className="text-xs text-muted-foreground">الأفضل أداءً إجمالاً</p>
+            <p className="text-xl font-bold" style={{ color: winner.color }}>{winner.name}</p>
+          </div>
+          <div className="mr-auto text-left">
+            <p className="text-xs text-muted-foreground">مجموع النقاط</p>
+            <p className="text-2xl font-bold" style={{ color: winner.color }}>
+              {scores[winner.name]}
+              <span className="text-sm text-muted-foreground font-normal"> / {metrics.length * n}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        {bestPerMetric.map(({ metric, company }) => (
+          <div key={metric.key} className="p-3 bg-card border rounded-xl space-y-1">
+            <p className="text-xs text-muted-foreground">{metric.label}</p>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: company.color }} />
+              <span className="text-sm font-semibold truncate" style={{ color: company.color }}>{company.name}</span>
+            </div>
+            <p className="text-xs font-mono text-foreground">{metric.fmt(metric.get(company))}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border overflow-auto shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="bg-primary/10 border-b">
+            <tr>
+              <th className="text-center px-3 py-3 font-semibold w-12">المرتبة</th>
+              <th className="text-right px-4 py-3 font-semibold">الشركة</th>
+              {metrics.map((m) => (
+                <th key={m.key} className="text-center px-3 py-3 font-semibold whitespace-nowrap text-xs">
+                  {m.label}
+                </th>
+              ))}
+              <th className="text-center px-3 py-3 font-semibold">النقاط</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedByScore.map((company, overallRank) => (
+              <tr
+                key={company.name}
+                className={cn(
+                  "border-b last:border-0 transition-colors",
+                  overallRank === 0 && "bg-amber-50 dark:bg-amber-950/20"
+                )}
+              >
+                <td className="px-3 py-3 text-center">
+                  <RankBadge rank={overallRank + 1} total={n} />
+                </td>
+                <td className="px-4 py-3">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: company.color }} />
+                    <span className="font-medium" style={{ color: company.color }}>{company.name}</span>
+                  </span>
+                </td>
+                {metrics.map((m) => {
+                  const rank = ranks[company.name][m.key];
+                  const val  = vals[company.name][m.key];
+                  return (
+                    <td key={m.key} className="px-3 py-3 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <RankBadge rank={rank} total={n} />
+                        <span className="text-[10px] text-muted-foreground font-mono">{m.fmt(val)}</span>
+                      </div>
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-3 text-center">
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="font-bold text-base" style={{ color: company.color }}>
+                      {scores[company.name]}
+                    </span>
+                    <div className="w-16 bg-muted rounded-full h-1.5">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: String(Math.round((scores[company.name] / maxScore) * 100)) + "%",
+                          backgroundColor: company.color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs text-muted-foreground px-1">
+        نظام النقاط: المرتبة الأولى في كل مقياس تحصل على {n} نقاط، المرتبة الثانية {n - 1} نقطة، وهكذا. المجموع الكلي يحدد الترتيب الإجمالي.
+      </p>
     </div>
   );
 }

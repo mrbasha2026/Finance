@@ -5,10 +5,11 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { calculateKPIs, aggregateData } from "@/lib/pnl-calculations";
+import { calculateKPIs, aggregateData, inferDynamic } from "@/lib/pnl-calculations";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { CompanyPnL, PnLKPIs, PeriodGroup } from "@/lib/pnl-types";
 import { cn } from "@/lib/utils";
+import { DynamicCategory } from "@/lib/category-types";
 import { CompanyPeriodData } from "./page";
 
 export type HoldingChartType =
@@ -30,6 +31,7 @@ interface Props {
   periodGroups: PeriodGroup[];
   allCompanyDatasets: CompanyPnL[];
   selectedCompanyNames: string[];
+  categories: DynamicCategory[];
   chartType: HoldingChartType;
   currency: string;
 }
@@ -45,6 +47,7 @@ export function HoldingCharts({
   periodGroups,
   allCompanyDatasets,
   selectedCompanyNames,
+  categories,
   chartType,
 }: Props) {
   if (periodDataByCompany.length === 0) {
@@ -82,11 +85,8 @@ export function HoldingCharts({
   // ── 2. Revenue vs Expense Chart ───────────────────────────────────────────────
   if (chartType === "rev_exp") {
     const data = periodDataByCompany.map((c) => {
-      const totalExpenses =
-        (c.data["cost_of_goods_sold"] ?? 0) +
-        (c.data["selling_expenses"] ?? 0) +
-        (c.data["general_admin_expenses"] ?? 0) +
-        (c.data["depreciation_amortization"] ?? 0);
+      // المصروفات = الإيرادات - صافي الدخل (مشتقة من القيم المحسوبة)
+      const totalExpenses = c.kpis.revenue - c.kpis.netIncome;
       return {
         name: c.name,
         الإيرادات: c.kpis.revenue,
@@ -197,7 +197,7 @@ export function HoldingCharts({
         const ds = allCompanyDatasets.filter(
           (c) => c.companyName === name && g.months.includes(c.period)
         );
-        point[name] = calculateKPIs(aggregateData(ds)).netIncome;
+        point[name] = calculateKPIs(inferDynamic(aggregateData(ds), categories)).netIncome;
       });
       return point;
     });
@@ -261,21 +261,19 @@ export function HoldingCharts({
 
   // ── 7. Waterfall Consolidated Chart ──────────────────────────────────────────
   if (chartType === "waterfall_consolidated") {
-    const revenue = consolidatedData["revenue"] ?? 0;
-    const cogs = consolidatedData["cost_of_goods_sold"] ?? 0;
-    const grossProfit = revenue - cogs;
-    const sellingExp = (consolidatedData["selling_distribution_expenses"] ?? 0) || (consolidatedData["selling_expenses"] ?? 0);
-    const gaExp = consolidatedData["general_admin_expenses"] ?? 0;
-    const daExp = consolidatedData["depreciation_amortization"] ?? 0;
-    const totalOpEx = sellingExp + gaExp + daExp;
-    const netIncome = consolidatedData["net_income"] ?? (consolidatedData["income_before_zakat"] ?? (grossProfit - totalOpEx));
+    const revenue     = consolidatedData["revenue"]          ?? 0;
+    const grossProfit = consolidatedData["gross_profit"]      ?? 0;
+    const opIncome    = consolidatedData["operating_income"]  ?? 0;
+    const netIncome   = consolidatedData["net_income"]        ?? 0;
+    const cogs        = revenue - grossProfit;
+    const totalOpEx   = grossProfit - opIncome;
 
     const data = [
-      { name: "الإيرادات", value: revenue, fill: "#0d9488" },
-      { name: "تكلفة البضاعة", value: -cogs, fill: "#ef4444" },
-      { name: "إجمالي الربح", value: grossProfit, fill: "#3b82f6" },
-      { name: "مصروفات التشغيل", value: -totalOpEx, fill: "#f97316" },
-      { name: "صافي الربح", value: netIncome, fill: netIncome >= 0 ? "#10b981" : "#ef4444" },
+      { name: "الإيرادات",       value:  revenue,     fill: "#0d9488" },
+      { name: "تكلفة البضاعة",  value: -cogs,        fill: "#ef4444" },
+      { name: "إجمالي الربح",    value:  grossProfit, fill: "#3b82f6" },
+      { name: "مصروفات التشغيل", value: -totalOpEx,   fill: "#f97316" },
+      { name: "صافي الربح",      value:  netIncome,   fill: netIncome >= 0 ? "#10b981" : "#ef4444" },
     ];
 
     return (
@@ -305,7 +303,7 @@ export function HoldingCharts({
         const ds = allCompanyDatasets.filter(
           (c) => c.companyName === name && g.months.includes(c.period)
         );
-        const netIncome = calculateKPIs(aggregateData(ds)).netIncome;
+        const netIncome = calculateKPIs(inferDynamic(aggregateData(ds), categories)).netIncome;
         return { label: g.labelAr, netIncome };
       });
       return { name, color, periods };

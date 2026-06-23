@@ -12,22 +12,54 @@ import { ExecutiveSummary } from "./ExecutiveSummary";
 import { calculateKPIs, groupPeriods, aggregateData, inferDynamic } from "@/lib/pnl-calculations";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { CompanyPnL } from "@/lib/pnl-types";
-import { FileBarChart2 } from "lucide-react";
+import { FileBarChart2, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DynamicCategory } from "@/lib/category-types";
+import { DynamicCategory, catKey, FORMULA_KEYS } from "@/lib/category-types";
 
 type ReportTab = "pnl" | "executive" | "comparison" | "trend" | "revenue" | "expenses" | "margin" | "variance";
 type ComparisonType = "previous_period" | "yoy" | "both";
 
-const REPORT_TABS: { key: ReportTab; label: string; description: string }[] = [
-  { key: "pnl",        label: "الأرباح والخسائر",  description: "جدول الأرباح والخسائر التفصيلي مع إمكانية المقارنة بالفترات السابقة" },
-  { key: "comparison", label: "مقارنة الفترات",    description: "مقارنة مفصلة بين الفترة الحالية والفترة السابقة أو نفس الفترة من العام الماضي" },
-  { key: "trend",      label: "اتجاه الأرباح",     description: "مخطط خطي يتبع تطور الإيرادات والأرباح الرئيسية عبر الفترات الزمنية" },
-  { key: "revenue",    label: "تحليل الإيرادات",   description: "تحليل تفصيلي لمصادر الإيرادات ومساهمة كل بند في الإجمالي" },
-  { key: "expenses",   label: "تحليل المصروفات",   description: "توزيع المصروفات التشغيلية وتكلفة المبيعات مع مخطط دائري" },
-  { key: "margin",     label: "هوامش الربح",       description: "تتبع هوامش الربح الإجمالي والتشغيلي وصافي الربح عبر الفترات" },
-  { key: "variance",   label: "تغير الربح",        description: "مقارنة الانحراف في كل بند مالي بين الفترة الحالية والسابقة" },
-  { key: "executive",  label: "الملخص التنفيذي",  description: "ملخص تنفيذي شامل بأبرز المؤشرات المالية ونقاط القوة والضعف" },
+const REPORT_TABS: { key: ReportTab; label: string; purpose: string; benefit: string }[] = [
+  {
+    key: "pnl", label: "الأرباح والخسائر",
+    purpose: "يعرض جدولاً تفصيلياً لجميع بنود الإيرادات والمصروفات وصافي الدخل مع إمكانية مقارنتها بالفترة السابقة أو العام الماضي.",
+    benefit: "يمنحك صورة مالية كاملة للشركة دفعةً واحدة ويساعدك على تحديد بنود الربح والخسارة بدقة.",
+  },
+  {
+    key: "comparison", label: "مقارنة الفترات",
+    purpose: "يقارن كل بند مالي بين الفترة الحالية والفترة السابقة أو نفس الفترة من العام الماضي مع نسبة التغيير.",
+    benefit: "يكشف الانحرافات والتحسينات في الأداء المالي ويدعم اتخاذ قرارات تصحيحية سريعة.",
+  },
+  {
+    key: "trend", label: "اتجاه الأرباح",
+    purpose: "يرسم مخططاً خطياً يتتبع تطور الإيرادات وإجمالي الربح والدخل التشغيلي وصافي الدخل عبر جميع الفترات.",
+    benefit: "يوضح الاتجاه العام للأداء المالي ويمكّنك من التنبؤ بالمسار المستقبلي للأرباح.",
+  },
+  {
+    key: "revenue", label: "تحليل الإيرادات",
+    purpose: "يحلل مصادر الإيرادات ويوضح مساهمة كل بند في إجمالي الدخل عبر الفترات الزمنية المختلفة.",
+    benefit: "يحدد مصادر الدخل الأكثر ربحية ويساعد في تركيز الجهود على القنوات الأعلى أداءً.",
+  },
+  {
+    key: "expenses", label: "تحليل المصروفات",
+    purpose: "يوزع المصروفات التشغيلية وتكلفة المبيعات ويعرضها في جدول مقارن ومخطط دائري بصري.",
+    benefit: "يحدد أين تُصرف الأموال ويساعد في ضبط التكاليف وزيادة كفاءة الإنفاق.",
+  },
+  {
+    key: "margin", label: "هوامش الربح",
+    purpose: "يتتبع هامش الربح الإجمالي والتشغيلي وصافي الربح كنسبة مئوية من الإيرادات عبر جميع الفترات.",
+    benefit: "يقيس كفاءة الشركة في تحويل الإيرادات إلى ربح ويظهر تحسّن أو تراجع الكفاءة التشغيلية.",
+  },
+  {
+    key: "variance", label: "تغير الربح",
+    purpose: "يقيس الانحراف المطلق والنسبي لكل بند مالي بين الفترة الحالية والفترة السابقة.",
+    benefit: "يكشف البنود التي شهدت تغيراً كبيراً ويساعد في تحديد أسباب تحسّن أو تراجع الأرباح.",
+  },
+  {
+    key: "executive", label: "الملخص التنفيذي",
+    purpose: "يقدم ملخصاً شاملاً بأبرز المؤشرات المالية ونقاط القوة والضعف في صفحة واحدة مرتبة.",
+    benefit: "مصمم لاتخاذ القرارات السريعة على مستوى الإدارة العليا دون الحاجة لقراءة التفاصيل.",
+  },
 ];
 
 const COMPARISON_OPTIONS: { key: ComparisonType; label: string }[] = [
@@ -59,8 +91,8 @@ export default function PnLReportsPage() {
         fetch("/api/journal-entries"),
         fetch("/api/categories"),
       ]);
-      const { datasets } = await pnlRes.json();
-      const { entries }  = await jeRes.json();
+      const { datasets = [] } = await pnlRes.json();
+      const { entries  = [] } = await jeRes.json();
       const { categories: cats } = await catsRes.json();
       setCategories(cats ?? []);
 
@@ -335,9 +367,21 @@ export default function PnLReportsPage() {
 
       {/* ── وصف التبويب النشط ── */}
       {(() => {
-        const desc = REPORT_TABS.find(t => t.key === activeTab)?.description;
-        return desc ? (
-          <p className="text-xs text-muted-foreground px-1 -mt-2">{desc}</p>
+        const tab = REPORT_TABS.find(t => t.key === activeTab);
+        return tab ? (
+          <div className="flex gap-3 p-3.5 bg-primary/5 border border-primary/20 rounded-xl text-sm">
+            <Info size={16} className="text-primary shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-foreground">
+                <span className="font-semibold text-primary">ماذا يعمل: </span>
+                {tab.purpose}
+              </p>
+              <p className="text-muted-foreground">
+                <span className="font-semibold">الفائدة: </span>
+                {tab.benefit}
+              </p>
+            </div>
+          </div>
         ) : null;
       })()}
 
@@ -345,7 +389,7 @@ export default function PnLReportsPage() {
       <div className="space-y-4 fade-in">
         {activeTab === "pnl" && (
           <>
-            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} chartType="waterfall" currency="SAR" />
+            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} categories={categories} chartType="waterfall" currency="SAR" />
             <PnLTable
               data={selectedData}
               prevData={comparisonType === "yoy" ? yoyData : prevPeriodData}
@@ -362,7 +406,7 @@ export default function PnLReportsPage() {
         )}
         {activeTab === "comparison" && (
           <>
-            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} chartType="column" currency="SAR" />
+            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} categories={categories} chartType="column" currency="SAR" />
             <ComparisonTab
               selectedData={selectedData}
               selectedLabel={selectedGroup?.labelAr ?? selectedPeriodKey}
@@ -376,31 +420,31 @@ export default function PnLReportsPage() {
         )}
         {activeTab === "trend" && (
           <>
-            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} chartType="line" currency="SAR" />
+            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} categories={categories} chartType="line" currency="SAR" />
             <TrendTab datasets={companyDatasets} periodGroups={periodGroups} mode="trend" categories={categories} />
           </>
         )}
         {activeTab === "revenue" && (
           <>
-            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} chartType="area" currency="SAR" />
+            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} categories={categories} chartType="area" currency="SAR" />
             <TrendTab datasets={companyDatasets} periodGroups={periodGroups} mode="revenue" categories={categories} />
           </>
         )}
         {activeTab === "expenses" && (
           <>
-            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} chartType="pie" currency="SAR" />
+            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} categories={categories} chartType="pie" currency="SAR" />
             <TrendTab datasets={companyDatasets} periodGroups={periodGroups} mode="expenses" categories={categories} />
           </>
         )}
         {activeTab === "margin" && (
           <>
-            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} chartType="margin" currency="SAR" />
+            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} categories={categories} chartType="margin" currency="SAR" />
             <TrendTab datasets={companyDatasets} periodGroups={periodGroups} mode="margin" categories={categories} />
           </>
         )}
         {activeTab === "variance" && (
           <>
-            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} chartType="variance" currency="SAR" />
+            <PnLCharts data={selectedData} prevData={prevData} datasets={companyDatasets} periodGroups={periodGroups} categories={categories} chartType="variance" currency="SAR" />
             <TrendTab datasets={companyDatasets} periodGroups={periodGroups} mode="variance" categories={categories} />
           </>
         )}
@@ -569,12 +613,17 @@ function TrendTab({
   }
 
   if (mode === "expenses") {
-    const expKeys = [
-      { key: "cost_of_goods_sold",      label: "تكلفة البضاعة المباعة" },
-      { key: "selling_expenses",         label: "مصروفات البيع"         },
-      { key: "general_admin_expenses",   label: "مصروفات الإدارة"       },
-      { key: "depreciation_amortization",label: "الاستهلاك والإطفاء"    },
-    ];
+    const topExpenseCategories = categories.filter(
+      (c) => c.type === "expense" && !c.parentId && !FORMULA_KEYS.has(c.pnlKey ?? "")
+    );
+    const expKeys = topExpenseCategories.length > 0
+      ? topExpenseCategories.map((c) => ({ key: catKey(c), label: c.nameAr }))
+      : [
+          { key: "cost_of_goods_sold",       label: "تكلفة البضاعة المباعة" },
+          { key: "selling_expenses",          label: "مصروفات البيع"         },
+          { key: "general_admin_expenses",    label: "مصروفات الإدارة"       },
+          { key: "depreciation_amortization", label: "الاستهلاك والإطفاء"   },
+        ];
     return (
       <div className="rounded-xl border overflow-auto shadow-sm">
         <table className="w-full text-sm">

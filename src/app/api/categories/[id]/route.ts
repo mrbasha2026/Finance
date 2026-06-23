@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { SYSTEM_KEYS } from "@/lib/category-types";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -47,6 +48,11 @@ export async function DELETE(
 
     const { id } = await params;
     const cat = await prisma.category.findUnique({ where: { id } });
+
+    if (cat?.pnlKey && SYSTEM_KEYS.has(cat.pnlKey)) {
+      return NextResponse.json({ error: "لا يمكن حذف تصنيف أساسي" }, { status: 403 });
+    }
+
     if (cat) {
       await prisma.category.updateMany({
         where: { parentId: id },

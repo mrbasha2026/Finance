@@ -220,7 +220,10 @@ export function inferDynamic(
   function sumNode(cat: DynamicCategory): number {
     if (FORMULA_KEYS.has(cat.pnlKey ?? "")) return data[catKey(cat)] ?? 0;
     if (cat.children.length === 0) return data[catKey(cat)] ?? 0;
-    const total = cat.children.reduce((acc, child) => acc + sumNode(child), 0);
+    const childSum = cat.children.reduce((acc, child) => acc + sumNode(child), 0);
+    // If children have no data, preserve any value stored directly on this category.
+    // This handles accounts that were mapped to a parent pnlKey instead of a leaf.
+    const total = childSum !== 0 ? childSum : (raw[catKey(cat)] ?? 0);
     data[catKey(cat)] = total;
     return total;
   }
@@ -265,6 +268,13 @@ export function inferDynamic(
   // Total Comprehensive Income = Net Income + OCI
   data["total_comprehensive_income"] =
     (data["net_income"] ?? 0) + (data["other_comprehensive_income"] ?? 0);
+
+  // Normalize IFRS↔legacy key aliases so display components find values
+  // regardless of which key variant the user's categories use
+  data["cost_of_goods_sold"] = (data["cost_of_goods_sold"] ?? 0) || (data["cost_of_sales"] ?? 0);
+  data["cost_of_sales"] = data["cost_of_goods_sold"];
+  data["selling_expenses"] = (data["selling_expenses"] ?? 0) || (data["selling_distribution_expenses"] ?? 0);
+  data["selling_distribution_expenses"] = data["selling_expenses"];
 
   return data;
 }

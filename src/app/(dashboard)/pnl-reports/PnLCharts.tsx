@@ -6,9 +6,10 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { calculateKPIs, aggregateData } from "@/lib/pnl-calculations";
+import { calculateKPIs, aggregateData, inferDynamic } from "@/lib/pnl-calculations";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { CompanyPnL, PeriodGroup } from "@/lib/pnl-types";
+import { DynamicCategory, catKey, FORMULA_KEYS } from "@/lib/category-types";
 
 const COLORS = ["#0d9488", "#3b82f6", "#8b5cf6", "#ec4899", "#f97316", "#eab308"];
 
@@ -17,6 +18,7 @@ interface Props {
   prevData: Record<string, number> | null;
   datasets: CompanyPnL[];
   periodGroups: PeriodGroup[];
+  categories: DynamicCategory[];
   chartType: string;
   currency: string;
 }
@@ -30,19 +32,19 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-export function PnLCharts({ data, prevData, datasets, periodGroups, chartType, currency }: Props) {
+export function PnLCharts({ data, prevData, datasets, periodGroups, categories, chartType, currency }: Props) {
   const curr = currency as "SAR";
 
   const trendData = periodGroups.map((g) => {
     const ds = datasets.filter((c) => g.months.includes(c.period));
-    const aggData = aggregateData(ds);
+    const aggData = inferDynamic(aggregateData(ds), categories);
     const kpis = calculateKPIs(aggData);
     return {
       period: g.labelAr,
-      revenue: aggData["revenue"] ?? 0,
-      gross_profit: aggData["gross_profit"] ?? 0,
-      operating_income: aggData["operating_income"] ?? 0,
-      net_income: aggData["net_income"] ?? 0,
+      revenue: kpis.revenue,
+      gross_profit: kpis.grossProfit,
+      operating_income: kpis.operatingIncome,
+      net_income: kpis.netIncome,
       grossMargin: kpis.grossMargin,
       operatingMargin: kpis.operatingMargin,
       netMargin: kpis.netMargin,
@@ -132,12 +134,19 @@ export function PnLCharts({ data, prevData, datasets, periodGroups, chartType, c
 
   // ── مخطط توزيع التكاليف ──────────────────────────────────────────────────
   if (chartType === "pie") {
-    const costSlices = [
-      { name: "تكلفة البضاعة المباعة", value: data["cost_of_goods_sold"] ?? 0 },
-      { name: "مصروفات البيع والتوزيع", value: data["selling_expenses"] ?? 0 },
-      { name: "مصروفات إدارية وعمومية", value: data["general_admin_expenses"] ?? 0 },
-      { name: "الاستهلاك والإطفاء", value: data["depreciation_amortization"] ?? 0 },
-    ].filter((d) => d.value > 0);
+    const topExpenseCategories = categories.filter(
+      (c) => c.type === "expense" && !c.parentId && !FORMULA_KEYS.has(c.pnlKey ?? "")
+    );
+    const costSlices = (
+      topExpenseCategories.length > 0
+        ? topExpenseCategories.map((c) => ({ name: c.nameAr, value: data[catKey(c)] ?? 0 }))
+        : [
+            { name: "تكلفة البضاعة المباعة", value: data["cost_of_goods_sold"] ?? 0 },
+            { name: "مصروفات البيع والتوزيع", value: data["selling_expenses"] ?? 0 },
+            { name: "مصروفات إدارية وعمومية", value: data["general_admin_expenses"] ?? 0 },
+            { name: "الاستهلاك والإطفاء", value: data["depreciation_amortization"] ?? 0 },
+          ]
+    ).filter((d) => d.value > 0);
 
     return (
       <ChartCard title="توزيع بنود التكاليف والمصروفات">
@@ -222,12 +231,19 @@ export function PnLCharts({ data, prevData, datasets, periodGroups, chartType, c
 
   // ── مخطط شلال الربحية (من الإيرادات إلى صافي الدخل) ─────────────────────
   if (chartType === "waterfall") {
+    const revenue     = data["revenue"] ?? 0;
+    const grossProfit = data["gross_profit"] ?? 0;
+    const opIncome    = data["operating_income"] ?? 0;
+    const netIncome   = data["net_income"] ?? 0;
+    const cogs        = revenue - grossProfit;
+    const opEx        = grossProfit - opIncome;
+
     const waterfallData = [
-      { name: "الإيرادات", value: data["revenue"] ?? 0, fill: COLORS[0] },
-      { name: "تكلفة البضاعة المباعة", value: -(data["cost_of_goods_sold"] ?? 0), fill: COLORS[4] },
-      { name: "إجمالي الربح", value: data["gross_profit"] ?? 0, fill: COLORS[1] },
-      { name: "مصروفات التشغيل", value: -(data["operating_expenses"] ?? 0), fill: COLORS[4] },
-      { name: "صافي الدخل", value: data["net_income"] ?? 0, fill: COLORS[2] },
+      { name: "الإيرادات",             value:  revenue,     fill: COLORS[0] },
+      { name: "تكلفة البضاعة المباعة", value: -cogs,        fill: COLORS[4] },
+      { name: "إجمالي الربح",          value:  grossProfit, fill: COLORS[1] },
+      { name: "مصروفات التشغيل",       value: -opEx,        fill: COLORS[4] },
+      { name: "صافي الدخل",            value:  netIncome,   fill: netIncome >= 0 ? COLORS[2] : COLORS[4] },
     ];
 
     return (

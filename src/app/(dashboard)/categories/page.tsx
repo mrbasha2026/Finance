@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Tags, Trash2, ChevronDown, ChevronLeft, Pencil, GripVertical, X, Check } from "lucide-react";
 import { SkeletonTable } from "@/components/shared/SkeletonLoaders";
-import { DynamicCategory, FORMULA_KEYS } from "@/lib/category-types";
+import { DynamicCategory, FORMULA_KEYS, SYSTEM_KEYS } from "@/lib/category-types";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -65,6 +65,7 @@ function CategoryRow({
 }) {
   const hasChildren = cat.children.length > 0;
   const isFormula = FORMULA_KEYS.has(cat.pnlKey ?? "");
+  const isSystem  = SYSTEM_KEYS.has(cat.pnlKey ?? "");
   const isOpen = expanded[cat.id] ?? true;
 
   return (
@@ -88,6 +89,11 @@ function CategoryRow({
             {isFormula && (
               <span className="text-[10px] bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded font-medium">
                 معادلة
+              </span>
+            )}
+            {isSystem && !isFormula && (
+              <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-medium">
+                أساسي
               </span>
             )}
             {hasChildren && !isFormula && (
@@ -127,7 +133,7 @@ function CategoryRow({
             >
               <Pencil size={13} />
             </button>
-            {!isFormula && (
+            {!isSystem && (
               <button
                 onClick={() => onDelete(cat.id)}
                 title="حذف"
@@ -166,6 +172,8 @@ export default function CategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<DynamicCategory | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [parentSearch, setParentSearch] = useState("");
+  const [parentOpen, setParentOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -184,6 +192,8 @@ export default function CategoriesPage() {
   function openAdd(parentId = "") {
     setEditTarget(null);
     setForm({ ...EMPTY_FORM, parentId });
+    setParentSearch("");
+    setParentOpen(false);
     setDialogOpen(true);
   }
 
@@ -198,6 +208,8 @@ export default function CategoriesPage() {
       isTotal: cat.isTotal,
       isSubtotal: cat.isSubtotal,
     });
+    setParentSearch("");
+    setParentOpen(false);
     setDialogOpen(true);
   }
 
@@ -272,6 +284,9 @@ export default function CategoriesPage() {
       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground p-3 bg-muted/30 rounded-xl">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-violet-400" /> بنود بمعادلة ثابتة (لا تُحذف)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> بنود أساسية للنظام (لا تُحذف — يمكن تعديل الاسم)
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-blue-400" /> بنود تُجمع تلقائياً من أبنائها
@@ -362,19 +377,68 @@ export default function CategoriesPage() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">تحت بند (اختياري)</label>
-                <select
-                  value={form.parentId}
-                  onChange={(e) => setForm({ ...form, parentId: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <option value="">— بند رئيسي (بدون أب) —</option>
-                  {nonFormula.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {" ".repeat((flat.filter((p) => p.id === c.parentId).length > 0 ? 4 : 0))}
-                      {c.nameAr}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => { setParentOpen((o) => !o); setParentSearch(""); }}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-background text-right flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    <span className={cn(!form.parentId ? "text-muted-foreground" : "")}>
+                      {nonFormula.find((c) => c.id === form.parentId)?.nameAr ?? "— بند رئيسي (بدون أب) —"}
+                    </span>
+                    <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                  </button>
+                  {parentOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[59]" onClick={() => setParentOpen(false)} />
+                      <div className="absolute z-[60] mt-1 w-full bg-card border rounded-lg shadow-lg overflow-hidden">
+                        <div className="p-2 border-b">
+                          <input
+                            autoFocus
+                            value={parentSearch}
+                            onChange={(e) => setParentSearch(e.target.value)}
+                            placeholder="بحث..."
+                            className="w-full px-3 py-1.5 text-sm bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          {!parentSearch && (
+                            <button
+                              type="button"
+                              onClick={() => { setForm({ ...form, parentId: "" }); setParentOpen(false); }}
+                              className={cn(
+                                "w-full text-right px-3 py-2 text-sm hover:bg-muted transition-colors block text-muted-foreground",
+                                !form.parentId && "bg-primary/10 text-primary font-medium"
+                              )}
+                            >
+                              — بند رئيسي (بدون أب) —
+                            </button>
+                          )}
+                          {nonFormula
+                            .filter((c) =>
+                              c.nameAr.includes(parentSearch) ||
+                              c.name.toLowerCase().includes(parentSearch.toLowerCase())
+                            )
+                            .map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => { setForm({ ...form, parentId: c.id }); setParentOpen(false); }}
+                                className={cn(
+                                  "w-full text-right px-3 py-2 text-sm hover:bg-muted transition-colors block",
+                                  c.parentId && "pr-6",
+                                  form.parentId === c.id && "bg-primary/10 text-primary font-medium"
+                                )}
+                              >
+                                {c.nameAr}
+                              </button>
+                            ))
+                          }
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Flags */}

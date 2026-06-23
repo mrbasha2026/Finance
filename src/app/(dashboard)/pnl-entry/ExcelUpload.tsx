@@ -316,7 +316,7 @@ function PnLKeySelect({
                 ) : (
                   filtered.map((cat) => (
                     <button
-                      key={cat.pnlKey}
+                      key={cat.id}
                       onClick={() => { onChange(cat.pnlKey); setOpen(false); setQuery(""); }}
                       className={`w-full text-right px-3 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between gap-2 ${
                         cat.pnlKey === value ? "bg-primary/10 text-primary font-medium" : ""
